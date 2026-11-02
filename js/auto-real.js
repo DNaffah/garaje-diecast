@@ -144,7 +144,7 @@ const TRADUCCIONES = [
   [/rear mid[- ]engine,? rear[- ]wheel[- ]drive|mid[- ]engine,? rear[- ]wheel[- ]drive/i, 'Motor central, tracción trasera'],
   [/rear[- ]engine,? rear[- ]wheel[- ]drive/i, 'Motor trasero, tracción trasera'],
   [/\bcoup[eé]\b/gi, 'coupé'], [/\bconvertible\b/gi, 'convertible'], [/\bsedan\b/gi, 'sedán'], [/\bhatchback\b/gi, 'hatchback'],
-  [/\b(\d)[- ]door (\w+(?: \w+)?)/gi, '$2 de $1 puertas'], [/\b(\d)[- ]door\b/gi, '$1 puertas'],
+  [/(\d)[- ]door ([\p{L}]+(?: [\p{L}]+)?)/giu, '$2 de $1 puertas'], [/\b(\d)[- ]door\b/gi, '$1 puertas'],
   [/\bstation wagon\b/gi, 'familiar'], [/\bpanel van\b/gi, 'furgón'], [/\bpickup truck\b/gi, 'pickup'], [/\bTarga top\b/gi, 'Targa'],
   [/\bmanual\b/gi, 'manual'], [/\bautomatic\b/gi, 'automática'], [/\bspeed\b/gi, 'velocidades'],
   [/\bWest Germany\b/g, 'Alemania Occidental'], [/\bGermany\b/g, 'Alemania'], [/\bJapan\b/g, 'Japón'], [/\bUnited States\b/g, 'Estados Unidos'],

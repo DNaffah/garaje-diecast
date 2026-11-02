@@ -450,3 +450,12 @@ button.version.en-vitrina { border-color: var(--pista); }
 
 .elegir-foto { width: auto; min-height: 32px; margin-top: 8px; padding: 0; border: 0; background: none; color: var(--tenue); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .elegir-foto:hover { color: var(--pista); }
+
+/* La fila de versiones se desplaza por dentro; sin esto estiraba toda la columna en el celular. */
+.museo-salas { grid-template-columns: minmax(0, 1fr); }
+.museo-salas > *, .sala-real-cuerpo > *, .sala-mini > * { min-width: 0; }
+.ficha dd { overflow-wrap: anywhere; }
+@media (max-width: 880px) {
+  .sala-real-cuerpo { grid-template-columns: minmax(0, 1fr); }
+  .ficha { grid-template-columns: minmax(0, 40%) minmax(0, 1fr); }
+}

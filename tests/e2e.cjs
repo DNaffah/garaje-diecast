@@ -211,6 +211,12 @@ async function simular(route) {
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(OUT, `${nombre}-6-salas.png`) });
     if (!(await page.isVisible('.placa'))) fallos.push(`${nombre}: no aparece la placa de la base`);
+    const desborde = await page.evaluate(() => {
+      const r = document.querySelector('#sala-real').getBoundingClientRect();
+      const dd = [...document.querySelectorAll('#sala-real .ficha dd')].map((x) => x.getBoundingClientRect().right);
+      return { sala: Math.round(r.right), dd: Math.round(Math.max(0, ...dd)), ancho: innerWidth };
+    });
+    if (desborde.sala > desborde.ancho || desborde.dd > desborde.ancho) fallos.push(`${nombre}: la ficha del auto real se sale de la pantalla (${JSON.stringify(desborde)})`);
     const tampo = await page.locator('.version').count();
     if (tampo !== 3) fallos.push(`${nombre}: se esperaban 3 versiones con foto, hubo ${tampo}`);
     const antes = await page.locator('.vitrina').count();
