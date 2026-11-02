@@ -1,5 +1,5 @@
-// Prueba de extremo a extremo con respuestas simuladas de la wiki (sin red).
-// Uso: servir la carpeta en 127.0.0.1:8164 y correr  node tests/e2e.cjs [carpeta-capturas]
+/* Prueba completa en Chromium con las APIs simuladas, sin internet.
+   Uso: servir la carpeta en 127.0.0.1:8164 y correr  node tests/e2e.cjs carpeta-de-capturas */
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -82,6 +82,17 @@ The '''Twin Mill''' is an original Hot Wheels design with two engines.
 |}
 `;
 
+const INFOBOX = `{{Infobox automobile
+| name = Nissan Skyline GT-R
+| manufacturer = [[Nissan]]
+| production = 1969–1972 · 1989–2002
+| layout = [[Front-engine, four-wheel-drive layout|Front-engine, all-wheel-drive]]
+| engine = 2.6 L [[Nissan RB engine#RB26DETT|RB26DETT]] twin-turbo [[Straight-six engine|I6]]
+| power = {{convert|206|kW|hp|abbr=on}}
+| transmission = 6-speed [[Getrag]] manual
+| body_style = 2-door [[coupé]]
+}}`;
+
 async function simular(route) {
   const url = new URL(route.request().url());
   const p = Object.fromEntries(url.searchParams);
@@ -110,20 +121,21 @@ async function simular(route) {
     if (p.prop === 'imageinfo') return json({ query: { pages: p.titles.split('|').map((t) => ({ title: t, imageinfo: [{ thumburl: 'https://static.wikia.nocookie.net/hotwheels/images/' + encodeURIComponent(t) }] })) } });
   }
   if (/wikipedia\.org$/.test(url.hostname)) {
-    if (url.pathname.includes('/page/summary/')) return json({ title: 'Nissan Skyline GT-R', extract: 'El Nissan Skyline GT-R es un deportivo japonés producido por Nissan entre 1969 y 2002.', wikibase_item: 'Q1063047', type: 'standard' });
-    return json({ query: { search: [{ title: 'Nissan Skyline GT-R' }] } });
-  }
-  if (url.hostname === 'www.wikidata.org') {
-    if (p.props === 'claims') return json({ entities: { Q1063047: { claims: {
-      P176: [{ mainsnak: { datavalue: { type: 'wikibase-entityid', value: { id: 'Q20165' } } } }],
-      P2031: [{ mainsnak: { datavalue: { type: 'time', value: { time: '+1999-01-01T00:00:00Z' } } } }],
-      P2052: [{ mainsnak: { datavalue: { type: 'quantity', value: { amount: '+250', unit: 'http://www.wikidata.org/entity/Q180154' } } } }],
-    } } } });
-    return json({ entities: { Q20165: { labels: { es: { value: 'Nissan' } } }, Q180154: { labels: { es: { value: 'kilómetro por hora' } } } } });
+    if (url.pathname.includes('/page/summary/')) return json({ title: 'Nissan Skyline GT-R', extract: 'El Nissan Skyline GT-R es un deportivo japonés de Nissan.', type: 'standard' });
+    if (p.list === 'search') return json({ query: { search: [{ title: 'Nissan Skyline GT-R' }, { title: 'Nissan RB engine' }, { title: 'Nissan Skyline' }] } });
+    if (p.prop === 'langlinks') return json({ query: { pages: [{ title: p.titles, langlinks: [{ lang: 'es', title: 'Nissan Skyline GT-R' }] }] } });
+    if (p.generator === 'images') {
+      const nombres = ['Nissan Skyline R34 GT-R Nür front left.jpg', 'Nissan Skyline R34 GT-R Nür rear right.jpg', 'Nissan Skyline R33 GT-R 001.jpg', 'RB26DETT R34 engine.jpg'];
+      return json({ query: { pages: nombres.map((n) => ({ title: 'File:' + n, imageinfo: [{ width: 1600, height: 900, thumburl: 'https://upload.wikimedia.org/x/' + encodeURIComponent(n), descriptionurl: 'https://commons.wikimedia.org/wiki/File:' + encodeURIComponent(n), extmetadata: { Artist: { value: '<a href="x">Fotógrafo <b>Ejemplo</b></a>' }, LicenseShortName: { value: 'CC BY-SA 4.0' } } }] })) } });
+    }
+    if (String(p.prop || '').includes('revisions')) return json({ query: { pages: [
+      { title: 'Nissan Skyline GT-R', original: { source: 'https://upload.wikimedia.org/x/Nissan_Skyline_GT-R_R34_V_Spec_II.jpg' }, revisions: [{ slots: { main: { content: INFOBOX } } }] },
+      { title: 'Nissan Skyline', revisions: [{ slots: { main: { content: '{{Infobox automobile\n| production = 1957–present\n}}' } } }] },
+    ] } });
   }
   if (url.hostname === 'commons.wikimedia.org') {
-    const nombres = ['Nissan Skyline R34 GT-R front left.jpg', 'Nissan Skyline R34 GT-R rear right.jpg', 'Nissan Skyline R34 side.jpg', 'Nissan Skyline R34 engine bay.jpg', 'Nissan Skyline R34 at show.jpg'];
-    return json({ query: { pages: nombres.map((n, i) => ({ title: 'File:' + n, index: i + 1, imageinfo: [{ width: 1600, height: 900, thumburl: 'https://upload.wikimedia.org/x/' + encodeURIComponent(n), descriptionurl: 'https://commons.wikimedia.org/wiki/File:' + encodeURIComponent(n), extmetadata: { Artist: { value: '<a href="x">Fotógrafo <b>Ejemplo</b></a>' }, LicenseShortName: { value: 'CC BY-SA 4.0' } } }] })) } });
+    const nombres = ['Nissan Skyline R34 GT-R V Spec side.jpg', 'Nissan Skyline R34 police car.jpg', 'Nissan Skyline R34 at show.jpg'];
+    return json({ query: { pages: nombres.map((n, i) => ({ title: 'File:' + n, index: i + 1, imageinfo: [{ width: 1600, height: 900, thumburl: 'https://upload.wikimedia.org/x/' + encodeURIComponent(n), descriptionurl: 'https://commons.wikimedia.org/wiki/File:' + encodeURIComponent(n), extmetadata: { Artist: { value: 'Otra persona' }, LicenseShortName: { value: 'CC BY 2.0' } } }] })) } });
   }
   return route.fulfill({ status: 404, body: '' });
 }
@@ -142,7 +154,6 @@ async function simular(route) {
     await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
     await page.goto(BASE, { waitUntil: 'load' });
 
-    // estado vacío
     if (!(await page.isVisible('#vacio'))) fallos.push(`${nombre}: no se ve el estado vacío`);
     await page.screenshot({ path: path.join(OUT, `${nombre}-0-vacio.png`) });
 
@@ -164,40 +175,55 @@ async function simular(route) {
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(OUT, `${nombre}-2-garaje.png`), fullPage: true });
 
-    // persistencia
     await page.reload({ waitUntil: 'load' });
     await page.waitForTimeout(1600);
     if ((await page.locator('.vitrina').count()) !== 3) fallos.push(`${nombre}: la colección no se recordó al recargar`);
 
-    // museo del auto licenciado
     await page.locator('.vitrina-boton').first().click();
-    await page.waitForSelector('.ficha dd');
-    await page.waitForTimeout(400);
+    await page.waitForSelector('#datos-recorrido li');
+    await page.waitForTimeout(500);
     const t = await page.textContent('#museo-titulo');
     if (!/Skyline/.test(t)) fallos.push(`${nombre}: título del museo inesperado: ${t}`);
-    const nFotos = await page.locator('#fotos img').count();
-    if (nFotos < 3) fallos.push(`${nombre}: el recorrido tiene ${nFotos} fotos`);
-    if (await page.locator('#fotos img[src*="engine"]').count()) fallos.push(`${nombre}: entró una foto del motor al recorrido`);
+    const fotosRec = await page.$$eval('#marco img', (xs) => xs.map((x) => decodeURIComponent(x.src)));
+    if (!fotosRec.length) fallos.push(`${nombre}: el recorrido no tiene fotos`);
+    if (fotosRec.some((u) => /engine|R33|police/i.test(u))) fallos.push(`${nombre}: entró una foto que no es el mismo auto: ${fotosRec.join(' | ')}`);
+    if (!/R34_V_Spec_II/.test(fotosRec[0] || '')) fallos.push(`${nombre}: la foto principal no es la portada del artículo: ${fotosRec[0]}`);
+    const datos = await page.$$eval('#datos-recorrido li', (xs) => xs.map((x) => x.textContent));
+    if (!datos.some((d) => /RB26DETT/.test(d)) || !datos.some((d) => /276 hp/.test(d))) fallos.push(`${nombre}: la ficha del recorrido no trae motor y potencia: ${datos.join(' | ')}`);
     await page.screenshot({ path: path.join(OUT, `${nombre}-3-museo-0.png`) });
-    await page.evaluate(() => { const m = document.querySelector('#museo'); m.scrollTop = (document.querySelector('#escenario-pista').offsetHeight - innerHeight) * .45; });
-    await page.waitForTimeout(250);
-    const grados = Number(await page.textContent('#grados'));
-    if (grados < 100 || grados > 220) fallos.push(`${nombre}: a mitad del recorrido marcó ${grados}°`);
-    await page.click('[data-fondo="noche"]');
-    await page.screenshot({ path: path.join(OUT, `${nombre}-4-museo-giro.png`) });
-    await page.evaluate(() => { const m = document.querySelector('#museo'); m.scrollTop = document.querySelector('#escenario-pista').offsetHeight; });
+    await page.evaluate(() => { const m = document.querySelector('#museo'); m.scrollTop = (document.querySelector('#recorrido').offsetHeight - innerHeight) * .7; });
+    await page.waitForTimeout(400);
+    const contador = await page.textContent('#contador-etapa');
+    if (!/^0[2-9] \/ /.test(contador)) fallos.push(`${nombre}: el recorrido no avanzó con el scroll (${contador})`);
+    if (!/f-(pista|taller|noche|desierto|estudio)/.test(await page.getAttribute('#fondo', 'class'))) fallos.push(`${nombre}: no se puso un fondo al azar`);
+    await page.screenshot({ path: path.join(OUT, `${nombre}-4-museo-avance.png`) });
+    await page.evaluate(() => { document.querySelector('#museo').scrollTop = 0; });
+    if (await page.isVisible('#elegir-foto')) {
+      await page.click('#elegir-foto');
+      await page.waitForSelector('#selector-fotos[open] .opcion-foto');
+      await page.screenshot({ path: path.join(OUT, `${nombre}-5-selector.png`) });
+      await page.locator('.opcion-foto').nth(1).click();
+      await page.waitForTimeout(300);
+      const guardada = await page.evaluate(() => JSON.parse(localStorage.getItem('garaje164.autos'))[0].fotoReal);
+      if (!guardada) fallos.push(`${nombre}: la foto elegida no quedó guardada`);
+    } else fallos.push(`${nombre}: no aparece el botón Elegir otra foto`);
+    await page.evaluate(() => { const m = document.querySelector('#museo'); m.scrollTop = document.querySelector('#recorrido').offsetHeight; });
     await page.waitForTimeout(300);
-    await page.screenshot({ path: path.join(OUT, `${nombre}-5-salas.png`) });
+    await page.screenshot({ path: path.join(OUT, `${nombre}-6-salas.png`) });
     if (!(await page.isVisible('.placa'))) fallos.push(`${nombre}: no aparece la placa de la base`);
     const tampo = await page.locator('.version').count();
     if (tampo !== 3) fallos.push(`${nombre}: se esperaban 3 versiones con foto, hubo ${tampo}`);
+    const antes = await page.locator('.vitrina').count();
+    await page.locator('.version').first().click();
+    await page.waitForTimeout(1800);
+    if (await page.isVisible('#museo')) fallos.push(`${nombre}: tocar una versión no llevó al garaje`);
+    if ((await page.locator('.vitrina').count()) !== antes + 1) fallos.push(`${nombre}: tocar una versión no la agregó al garaje`);
+    await page.locator('.vitrina-boton').first().click();
+    await page.waitForSelector('#datos-recorrido li');
     if (await page.locator('script', { hasText: 'alert(1)' }).count()) fallos.push(`${nombre}: se insertó HTML de la wiki`);
     const autor = await page.textContent('#creditos');
     if (!/Fotógrafo Ejemplo/.test(autor) || /<b>/.test(autor)) fallos.push(`${nombre}: créditos mal limpiados`);
-    await page.evaluate(() => { const m = document.querySelector('#museo'); m.scrollTop = m.scrollHeight; });
-    await page.screenshot({ path: path.join(OUT, `${nombre}-6-salas-fin.png`) });
 
-    // volver y abrir el diseño original
     await page.click('#volver');
     await page.waitForTimeout(300);
     if (await page.isVisible('#museo')) fallos.push(`${nombre}: el botón volver no cerró el museo`);
@@ -206,14 +232,18 @@ async function simular(route) {
     const tipo = await page.textContent('#museo-tipo');
     if (!/Diseño original/.test(tipo)) fallos.push(`${nombre}: Twin Mill no se marcó como diseño original (${tipo})`);
     await page.screenshot({ path: path.join(OUT, `${nombre}-7-original.png`) });
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(300);
-
-    // quitar desde la lista
-    if (nombre === 'movil') { await page.click('#abrir-panel'); await page.waitForTimeout(350); }
-    await page.locator('.lista-coleccion .quitar').first().click();
-    await page.waitForTimeout(900);
-    if ((await page.locator('.vitrina').count()) !== 2) fallos.push(`${nombre}: quitar no sacó la vitrina`);
+    await page.click('#sacar-museo');
+    if (!/otra vez/i.test(await page.textContent('#sacar-museo'))) fallos.push(`${nombre}: Sacar del garaje no pidió confirmación`);
+    await page.click('#sacar-museo');
+    await page.waitForTimeout(1000);
+    if ((await page.locator('.vitrina').count()) !== 3) fallos.push(`${nombre}: Sacar del garaje (museo) no sacó el auto`);
+    await page.locator('.vitrina').first().hover().catch(() => {});
+    await page.locator('.vitrina .sacar').first().click({ force: true });
+    await page.waitForTimeout(150);
+    await page.locator('.vitrina .sacar').first().click({ force: true });
+    await page.waitForTimeout(1000);
+    if ((await page.locator('.vitrina').count()) !== 2) fallos.push(`${nombre}: el botón Sacar de la vitrina no funcionó`);
+    await page.screenshot({ path: path.join(OUT, `${nombre}-8-tras-sacar.png`) });
 
     const anchoDoc = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
     if (anchoDoc) fallos.push(`${nombre}: hay scroll horizontal`);

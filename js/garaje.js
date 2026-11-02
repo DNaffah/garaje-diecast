@@ -1,25 +1,81 @@
-// Panel de búsqueda y garaje de vitrinas.
-import { buscarModelos, leerModelo } from './wiki.js';
-import { cargarGaraje, guardarGaraje } from './almacen.js';
+/* Panel de la izquierda y vitrinas. Cada cambio se guarda en el navegador y,
+   si config.js tiene los datos de Supabase, también en la nube. */
+import { buscarModelos, leerModelo, imagenSegura } from './wiki.js';
+import { cargarGaraje, guardarGaraje, cargarFondo, guardarFondo } from './almacen.js';
+import { confirmarDosVeces } from './confirmar.js';
+import { nubeDisponible, idGaraje, leerNube, guardarNube, hayPendiente, reintentar, ocultarCodigoDelEnlace } from './nube.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const conMovimiento = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ENTRADA = 'cubic-bezier(.2,.7,.3,1)';
 
-let garaje = cargarGaraje();
+let garaje = limpiarLista(cargarGaraje());
 let busquedaActual = null;
+let ultimaVersionNube = '';
 
 const el = {
   panel: $('#panel'), q: $('#q'), resultados: $('#resultados'), lista: $('#lista-coleccion'), contador: $('#contador'),
-  vitrinas: $('#vitrinas'), vacio: $('#vacio'), sub: $('#garaje-sub'),
+  vitrinas: $('#vitrinas'), vacio: $('#vacio'), sub: $('#garaje-sub'), nube: $('#estado-nube'), copiar: $('#copiar-enlace'),
 };
 
-const enGaraje = (titulo) => garaje.some((a) => a.titulo === titulo);
-const guardar = () => guardarGaraje(garaje);
+const enGaraje = (clave) => garaje.some((a) => a.clave === clave);
+export const autoDelGaraje = (clave, { exacto = false } = {}) =>
+  garaje.find((a) => a.clave === clave) || (exacto ? null : garaje.find((a) => a.titulo === clave)) || null;
+function texto60(v, max) { return typeof v === 'string' ? v.slice(0, max) : ''; }
 
-// ---------- Búsqueda ----------
+function limpiarLista(lista) {
+  return (Array.isArray(lista) ? lista : []).filter((a) => a && typeof a.titulo === 'string' && a.titulo.length < 200).slice(0, 300).map((a) => ({
+    clave: typeof a.clave === 'string' && a.clave.startsWith(a.titulo) && a.clave.length < 400 ? a.clave : a.titulo,
+    titulo: a.titulo,
+    color: texto60(a.color, 60),
+    serie: texto60(a.serie, 120),
+    foto: imagenSegura(typeof a.foto === 'string' ? a.foto : ''),
+    anio: typeof a.anio === 'string' && /^\d{4}$/.test(a.anio) ? a.anio : '',
+    fotoReal: imagenSegura(typeof a.fotoReal === 'string' ? a.fotoReal : ''),
+  }));
+}
+
+function guardar() {
+  guardarGaraje(garaje);
+  if (!nubeDisponible()) return;
+  estadoNube('Guardando…');
+  guardarNube(garaje, cargarFondo(), (err, version) => {
+    if (err) { estadoNube('Sin conexión: guardado en este dispositivo, se sube al volver la red.', 'aviso'); return; }
+    ultimaVersionNube = version || ultimaVersionNube;
+    estadoNube('Guardado en la nube. Lo ves igual en todos tus dispositivos.', 'ok');
+  });
+}
+export const guardarTodo = guardar;
+
+function estadoNube(texto, tipo = '') {
+  if (!el.nube) return;
+  el.nube.textContent = texto;
+  el.nube.dataset.tipo = tipo;
+}
+
+async function traerDeLaNube({ primeraVez = false } = {}) {
+  if (!nubeDisponible() || hayPendiente()) return;
+  try {
+    const remoto = await leerNube();
+    /* Primera vez con la nube: si allá está vacío y aquí ya había carros, se suben estos. */
+    if (primeraVez && !remoto.autos.length && garaje.length) { guardar(); return; }
+    if (remoto.actualizado && remoto.actualizado === ultimaVersionNube) return;
+    ultimaVersionNube = remoto.actualizado || '';
+    garaje = limpiarLista(remoto.autos);
+    guardarGaraje(garaje);
+    if (remoto.fondo && remoto.fondo !== cargarFondo()) { guardarFondo(remoto.fondo); dispatchEvent(new CustomEvent('garaje:fondo')); }
+    pintarColeccion();
+    pintarVitrinas({ encender: primeraVez });
+    refrescarBotones();
+    estadoNube('Guardado en la nube. Lo ves igual en todos tus dispositivos.', 'ok');
+  } catch (e) {
+    estadoNube(/no existe/.test(e.message) ? 'Ese enlace de garaje no existe. Revisa el enlace del regalo.' : 'Sin conexión con la nube: mostrando lo guardado en este dispositivo.', 'aviso');
+  }
+}
+
 let espera;
 export function iniciarPanel() {
+  ocultarCodigoDelEnlace();
   el.q.addEventListener('input', () => {
     clearTimeout(espera);
     espera = setTimeout(() => buscar(el.q.value.trim()), 320);
@@ -29,6 +85,28 @@ export function iniciarPanel() {
   $('#panel-cerrar').addEventListener('click', () => el.panel.classList.remove('abierto'));
   pintarColeccion();
   pintarVitrinas({ encender: true });
+
+  if (nubeDisponible()) {
+    estadoNube('Conectando con tu garaje en la nube…');
+    el.copiar.hidden = false;
+    el.copiar.addEventListener('click', copiarEnlace);
+    traerDeLaNube({ primeraVez: true });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') traerDeLaNube(); });
+    addEventListener('online', () => reintentar((err) => !err && estadoNube('Guardado en la nube. Lo ves igual en todos tus dispositivos.', 'ok')));
+  } else {
+    estadoNube('Se guarda en este navegador.');
+  }
+}
+
+async function copiarEnlace() {
+  const enlace = `${location.origin}${location.pathname}?g=${idGaraje()}`;
+  try {
+    await navigator.clipboard.writeText(enlace);
+    el.copiar.textContent = 'Enlace copiado';
+  } catch {
+    el.copiar.textContent = enlace;
+  }
+  setTimeout(() => { el.copiar.textContent = 'Copiar enlace para otro dispositivo'; }, 2400);
 }
 
 async function buscar(texto) {
@@ -74,8 +152,8 @@ function filaResultado(m) {
   boton.dataset.titulo = m.titulo;
   actualizarBoton(boton);
   boton.addEventListener('click', () => {
-    if (enGaraje(m.titulo)) quitar(m.titulo);
-    else agregar({ titulo: m.titulo, foto: m.mini, anio: '' }, img);
+    if (enGaraje(m.titulo)) quitarAuto(m.titulo);
+    else agregar({ clave: m.titulo, titulo: m.titulo, foto: m.mini, anio: '', fotoReal: '', color: '', serie: '' }, img);
   });
   li.append(img, nombre, boton);
   return li;
@@ -84,24 +162,23 @@ function filaResultado(m) {
 function actualizarBoton(boton) {
   const esta = enGaraje(boton.dataset.titulo);
   boton.setAttribute('aria-pressed', String(esta));
-  boton.textContent = esta ? 'Quitar' : 'Agregar';
-  boton.setAttribute('aria-label', `${esta ? 'Quitar' : 'Agregar'} ${boton.dataset.titulo} ${esta ? 'del' : 'al'} garaje`);
+  boton.textContent = esta ? 'Sacar' : 'Agregar';
+  boton.setAttribute('aria-label', `${esta ? 'Sacar' : 'Agregar'} ${boton.dataset.titulo} ${esta ? 'del' : 'al'} garaje`);
 }
 const refrescarBotones = () => el.resultados.querySelectorAll('.boton-agregar').forEach(actualizarBoton);
 
-// ---------- Colección (lista del panel) ----------
 function pintarColeccion() {
   el.contador.textContent = String(garaje.length);
   el.lista.replaceChildren(...garaje.map((a) => {
     const li = document.createElement('li');
     const n = document.createElement('span');
-    n.textContent = a.titulo;
+    n.textContent = a.color ? `${a.titulo} · ${a.color}` : a.titulo;
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'quitar';
-    b.textContent = 'Quitar';
-    b.setAttribute('aria-label', `Quitar ${a.titulo} del garaje`);
-    b.addEventListener('click', () => quitar(a.titulo));
+    b.textContent = 'Sacar';
+    b.setAttribute('aria-label', `Sacar ${a.titulo} del garaje`);
+    b.addEventListener('click', () => quitarAuto(a.clave));
     li.append(n, b);
     return li;
   }));
@@ -111,11 +188,10 @@ function pintarColeccion() {
     : 'Agrega autos desde el panel para llenar las vitrinas.';
 }
 
-// ---------- Vitrinas ----------
 function vitrina(a) {
   const li = document.createElement('li');
   li.className = 'vitrina';
-  li.dataset.titulo = a.titulo;
+  li.dataset.clave = a.clave;
   const boton = document.createElement('button');
   boton.type = 'button';
   boton.className = 'vitrina-boton';
@@ -139,12 +215,36 @@ function vitrina(a) {
   const anio = document.createElement('span');
   anio.className = 'anio';
   anio.textContent = a.anio;
+  anio.title = 'Año de esta miniatura';
   etiqueta.append(nombre, anio);
+  if (a.color || a.serie) {
+    const detalle = document.createElement('span');
+    detalle.className = 'detalle';
+    detalle.textContent = [a.color, a.serie].filter(Boolean).join(' · ');
+    etiqueta.append(detalle);
+  }
 
   const repisa = document.createElement('div');
   repisa.className = 'repisa';
   boton.append(caja, repisa, etiqueta);
-  li.append(boton);
+
+  const sacar = document.createElement('button');
+  sacar.type = 'button';
+  sacar.className = 'sacar';
+  sacar.setAttribute('aria-label', `Sacar ${a.titulo} del garaje`);
+  sacar.title = 'Sacar del garaje';
+  const equis = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  equis.setAttribute('viewBox', '0 0 24 24');
+  equis.setAttribute('aria-hidden', 'true');
+  const trazo = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  trazo.setAttribute('d', 'M6 6l12 12M18 6L6 18');
+  equis.append(trazo);
+  const palabra = document.createElement('span');
+  palabra.textContent = 'Sacar';
+  sacar.append(equis, palabra);
+  sacar.addEventListener('click', () => { if (confirmarDosVeces(sacar, '¿Sacar? Toca otra vez')) quitarAuto(a.clave); });
+
+  li.append(boton, sacar);
   return li;
 }
 
@@ -167,8 +267,8 @@ function ponerFoto(contenedor, foto) {
 function pintarVitrinas({ encender = false } = {}) {
   el.vitrinas.replaceChildren(...garaje.map(vitrina));
   const items = [...el.vitrinas.children];
+  garaje.filter((a) => !a.foto).slice(0, 6).forEach((a) => completarDatos(a.clave));
   if (!encender || !conMovimiento()) { items.forEach((v) => v.classList.add('encendida')); return; }
-  // Momento de entrada: las luces de las vitrinas se prenden una tras otra.
   items.forEach((v, i) => parpadear(v, 250 + Math.min(i, 14) * 90));
 }
 
@@ -178,11 +278,11 @@ function parpadear(v, retraso = 0) {
 }
 
 function flip(mutar) {
-  const antes = new Map([...el.vitrinas.children].map((v) => [v.dataset.titulo, v.getBoundingClientRect()]));
+  const antes = new Map([...el.vitrinas.children].map((v) => [v.dataset.clave, v.getBoundingClientRect()]));
   mutar();
   if (!conMovimiento()) return;
   [...el.vitrinas.children].forEach((v) => {
-    const a = antes.get(v.dataset.titulo);
+    const a = antes.get(v.dataset.clave);
     if (!a) return;
     const d = v.getBoundingClientRect();
     const dx = a.left - d.left, dy = a.top - d.top;
@@ -190,8 +290,18 @@ function flip(mutar) {
   });
 }
 
+export function agregarAuto(a) {
+  if (enGaraje(a.clave)) {
+    const v = [...el.vitrinas.children].find((x) => x.dataset.clave === a.clave);
+    v?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (v) parpadear(v, 300);
+    return;
+  }
+  agregar(a, null);
+}
+
 async function agregar(a, origenImg) {
-  if (enGaraje(a.titulo)) return;
+  if (enGaraje(a.clave)) return;
   garaje.push(a);
   guardar();
   pintarColeccion();
@@ -199,7 +309,7 @@ async function agregar(a, origenImg) {
   const nueva = vitrina(a);
   flip(() => el.vitrinas.append(nueva));
   await llegada(nueva, origenImg);
-  completarDatos(a.titulo);
+  if (a.clave === a.titulo) completarDatos(a.clave);
 }
 
 async function llegada(v, origenImg) {
@@ -208,7 +318,6 @@ async function llegada(v, origenImg) {
   const angosto = matchMedia('(max-width: 880px)').matches;
   v.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   const destino = autoEl.getBoundingClientRect();
-  // 1. El auto sale del panel y vuela a la entrada de la vitrina.
   if (origenImg?.src && !angosto) {
     const o = origenImg.getBoundingClientRect();
     const vuelo = document.createElement('img');
@@ -226,7 +335,6 @@ async function llegada(v, origenImg) {
     ], { duration: 620, easing: 'cubic-bezier(.45,.05,.3,1)' }).finished.catch(() => {});
     vuelo.remove();
   }
-  // 2. Entra rodando sobre el tramo de pista, con un pequeño rebote de suspensión.
   autoEl.style.opacity = '';
   await autoEl.animate([
     { transform: 'translateX(-120%)', opacity: 0 },
@@ -234,31 +342,41 @@ async function llegada(v, origenImg) {
     { transform: 'translateX(-2%) translateY(1px)', offset: .88 },
     { transform: 'none' },
   ], { duration: 560, easing: 'cubic-bezier(.2,.8,.3,1)' }).finished.catch(() => {});
-  // 3. Se prende la luz de la vitrina.
   parpadear(v);
 }
 
-async function completarDatos(titulo) {
+async function completarDatos(clave) {
   try {
-    const m = await leerModelo(titulo);
-    const a = garaje.find((x) => x.titulo === titulo);
+    const actual = garaje.find((x) => x.clave === clave);
+    if (!actual) return;
+    const m = await leerModelo(actual.titulo);
+    const a = garaje.find((x) => x.clave === clave);
     if (!a) return;
-    // la foto principal de la ficha, salvo que sea un boceto; si no, la versión más reciente
     const principal = m.imagen && !/sketch|drawing|render|concept|blueprint/i.test(decodeURIComponent(m.imagen)) ? m.imagen : '';
-    const reciente = principal || m.versiones.at(-1)?.foto || m.versiones[0]?.foto || m.galeria[0]?.foto || m.imagen;
-    if (reciente) a.foto = reciente;
+    const foto = principal || m.versiones.at(-1)?.foto || m.versiones[0]?.foto || m.galeria[0]?.foto || m.imagen;
+    if (foto) a.foto = foto;
     a.anio = (/\b(19|20)\d{2}\b/.exec(m.anios) || [''])[0];
     guardar();
-    const v = [...el.vitrinas.children].find((x) => x.dataset.titulo === titulo);
+    const v = [...el.vitrinas.children].find((x) => x.dataset.clave === clave);
     if (!v) return;
-    if (reciente) ponerFoto(v.querySelector('.auto'), reciente);
+    if (foto) ponerFoto(v.querySelector('.auto'), foto);
     v.querySelector('.anio').textContent = a.anio;
   } catch { /* la vitrina se queda con la miniatura de la búsqueda */ }
 }
 
-async function quitar(titulo) {
-  const v = [...el.vitrinas.children].find((x) => x.dataset.titulo === titulo);
-  garaje = garaje.filter((a) => a.titulo !== titulo);
+export function actualizarAuto(clave, cambios) {
+  const a = garaje.find((x) => x.clave === clave);
+  if (!a) return;
+  Object.assign(a, cambios);
+  guardar();
+  const v = [...el.vitrinas.children].find((x) => x.dataset.clave === clave);
+  if (v && 'foto' in cambios) ponerFoto(v.querySelector('.auto'), a.foto);
+  if (v && 'anio' in cambios) v.querySelector('.anio').textContent = a.anio;
+}
+
+export async function quitarAuto(clave) {
+  const v = [...el.vitrinas.children].find((x) => x.dataset.clave === clave);
+  garaje = garaje.filter((a) => a.clave !== clave);
   guardar();
   pintarColeccion();
   refrescarBotones();
@@ -272,8 +390,6 @@ async function quitar(titulo) {
   }
   flip(() => v.remove());
 }
-
-export const autosDelGaraje = () => garaje.slice();
 
 function parrafo(texto, clase) { const p = document.createElement('p'); p.className = clase; p.textContent = texto; return p; }
 function esqueleto() { const d = document.createElement('div'); d.className = 'esqueleto'; d.style.height = '44px'; return d; }

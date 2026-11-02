@@ -28,3 +28,11 @@ Se anota en cada entrega: fecha, qué pasó, qué falló y cómo se corrigió.
   - Falló: Wikimedia sirve miniaturas desde `thumb.wikimedia.org` y la lista de hosts lo bloqueaba. Arreglo: agregado a `imagenSegura` y a la CSP.
 - **C seguridad:** sin `innerHTML` con datos externos; HTML de wikitexto y de autores de Commons neutralizado (comprobado); CSP con lista cerrada; revisión de secretos por patrón sin hallazgos.
 - **Pendiente conocido:** si la wiki o Wikimedia cambian su API, la búsqueda o las fotos pueden fallar; la página muestra el error y sigue funcionando con lo guardado.
+
+### 2026-11-02 · segunda entrega (después de la revisión del dueño)
+- **Problemas reportados:** el garaje no se veía igual en otro dispositivo; no había botón visible para sacar carros; las fotos del auto real eran malas y de otro carro.
+- **Revisión independiente:** un revisor con perfil de experto en autos y diseño evaluó capturas reales en dos rondas. Primera ronda: no aprobado (ficha de otra generación, wikitexto en inglés, fotos recortadas, '67 mostrando un '68, nota que tapaba datos).
+- **Arreglos:** artículo de Wikipedia por generación (años de producción del infobox y código en el título); foto de portada del año exacto; series del mismo carro y fotos verificadas del mismo modelo y generación; filtro de motores, interiores, autos de carreras, policía y tuneados; foto completa con fondo difuminado; ficha en español, métrica y filtrada por año; crédito por foto; confirmación al sacar; fondo al azar; versiones que se agregan al garaje.
+- **A técnica:** `tests/e2e.cjs` pasa en 1440×900 y 390×844 (incluye sacar desde la vitrina y desde el museo, agregar una versión, elegir otra foto y persistencia).
+- **B usuario simulado:** recorridos en vivo de R34, '67 Camaro, 1997 Supra, '71 911 y Countach: todas las fotos del recorrido son del mismo modelo y generación.
+- **C seguridad:** Supabase con RLS y sin acceso directo (401), funciones con UUID; CSP `default-src 'none'`; sin `innerHTML`; revisión de secretos sin hallazgos; ver `SECURITY.md`.

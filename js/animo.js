@@ -1,4 +1,4 @@
-// Notas de ánimo que aparecen de vez en cuando al abrir un auto.
+/* Mensajitos de ánimo. Salen al azar al abrir un carro, no siempre, para que no cansen. */
 const NOTAS = [
   'Cada colección empezó con un solo auto. Todo lo demás también.',
   'Hoy la pista es tuya. Sin límite de vueltas.',
@@ -20,7 +20,6 @@ let mostradas = 0;
 
 export function quizasMostrarNota(nodo, texto, boton) {
   abiertos++;
-  // la primera llega pronto (segundo o tercer auto) y luego más o menos una de cada tres
   const toca = (mostradas === 0 && abiertos >= 2 && Math.random() < 0.7) || (mostradas > 0 && Math.random() < 0.33);
   if (!toca) return;
   let i;
@@ -45,5 +44,5 @@ function mostrar(nodo, texto, boton, frase) {
       .finished.then(() => { nodo.hidden = true; });
   };
   boton.addEventListener('click', cerrar);
-  const auto = setTimeout(cerrar, 9000);
+  const auto = setTimeout(cerrar, 6500);
 }

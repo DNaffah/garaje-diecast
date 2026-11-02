@@ -1,7 +1,5 @@
-// Lectura de la Hot Wheels Wiki (Fandom) por su API pública de MediaWiki.
-// Todo lo que viene de la wiki se trata como texto no confiable: se limpia aquí
-// y se pinta siempre con textContent.
-
+/* Lo que llega de la Hot Wheels Wiki es texto de terceros: se limpia y se pinta
+   con textContent, nunca como HTML. */
 const API = 'https://hotwheels.fandom.com/api.php';
 export const WIKI_BASE = 'https://hotwheels.fandom.com/wiki/';
 const HOSTS_IMAGEN = ['static.wikia.nocookie.net', 'upload.wikimedia.org', 'thumb.wikimedia.org'];
@@ -14,7 +12,6 @@ export async function pedirJSON(base, params, { signal } = {}) {
   const promesa = fetch(url, { signal }).then(async (r) => {
     if (!r.ok) throw new Error(`La fuente respondió ${r.status}`);
     const json = await r.json();
-    // MediaWiki responde 200 con {error} cuando limita o rechaza: eso no se guarda en caché
     if (json?.error) throw new Error(json.error.info || json.error.code || 'Error de la API');
     return json;
   });
@@ -37,7 +34,6 @@ export async function buscarModelos(texto, { signal } = {}) {
   const r = await pedirJSON(API, {
     action: 'query', generator: 'search', gsrsearch: texto, gsrnamespace: '0', gsrlimit: '20',
     prop: 'pageimages|categories', piprop: 'thumbnail', pithumbsize: '200',
-    // solo interesa saber si la página es un modelo: la wiki los clasifica en estas categorías
     clcategories: 'Category:1:64|Category:Licensed Hot Wheels|Category:Unlicensed Hot Wheels', cllimit: 'max',
   }, { signal });
   const paginas = r?.query?.pages ?? [];
@@ -48,13 +44,11 @@ export async function buscarModelos(texto, { signal } = {}) {
     .map((p) => ({ titulo: p.title, mini: imagenSegura(p.thumbnail?.source ?? '') }));
 }
 
-// --- limpieza de wikitexto ---
 export function limpiarWikitexto(t = '') {
   let s = t
     .replace(/<ref[^>]*\/>/gi, '')
     .replace(/<ref[\s\S]*?<\/ref>/gi, '')
     .replace(/<!--[\s\S]*?-->/g, '');
-  // plantillas {{...}} (hasta 3 niveles de anidación)
   for (let i = 0; i < 3; i++) s = s.replace(/\{\{[^{}]*\}\}/g, '');
   s = s
     .replace(/\[\[(?:File|Image|Archivo):[^\]]*\]\]/gi, '')
@@ -84,7 +78,6 @@ function campoPlantilla(wikitexto, campo) {
 }
 
 function celdaSinAtributos(c) {
-  // " rowspan="2" |Metalflake Grey" → "Metalflake Grey" (sin romper [[enlace|texto]])
   const m = /^\s*(?:(?:rowspan|colspan|style|align|class|bgcolor|width)\s*=\s*"[^"]*"\s*)+\|(.*)$/is.exec(c);
   return m ? m[1] : c;
 }
