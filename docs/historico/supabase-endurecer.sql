@@ -1,3 +1,6 @@
+-- HISTÓRICO: esquema viejo, sin cuentas. No correr: usar docs/supabase-cuentas.sql.
+do $$ begin raise exception 'Script histórico: no correr. Usar docs/supabase-cuentas.sql'; end $$;
+
 -- Garaje 1:64 · segunda pasada de seguridad. Pegar en Supabase → SQL Editor → Run (una sola vez).
 -- La función de guardar ahora revisa cada campo: solo fotos de la Hot Wheels Wiki o de Wikimedia,
 -- años de 4 cifras y textos con largo máximo. Así nadie con el link puede meter enlaces raros.

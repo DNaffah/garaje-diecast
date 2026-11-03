@@ -1,21 +1,22 @@
-/* Panel de la izquierda y vitrinas. Cada cambio se guarda en el navegador y,
-   si config.js tiene los datos de Supabase, también en la nube. */
+/* Panel de la izquierda y vitrinas. Cada cambio se guarda en la cuenta de quien
+   entró, así el garaje se ve igual en todos sus dispositivos. */
 import { buscarModelos, leerModelo, imagenSegura, decodificar } from './wiki.js';
-import { cargarGaraje, guardarGaraje, cargarFondo, guardarFondo } from './almacen.js';
 import { confirmarDosVeces } from './confirmar.js';
-import { nubeDisponible, idGaraje, leerNube, guardarNube, hayPendiente, reintentar, ocultarCodigoDelEnlace } from './nube.js';
+import { leerNube, guardarNube, hayPendiente, reintentar } from './nube.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const conMovimiento = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ENTRADA = 'cubic-bezier(.2,.7,.3,1)';
 
-let garaje = limpiarLista(cargarGaraje());
+let garaje = [];
+let fondo = 'pista';
+let cargado = false;
 let busquedaActual = null;
 let ultimaVersionNube = '';
 
 const el = {
   panel: $('#panel'), q: $('#q'), resultados: $('#resultados'), lista: $('#lista-coleccion'), contador: $('#contador'),
-  vitrinas: $('#vitrinas'), vacio: $('#vacio'), sub: $('#garaje-sub'), nube: $('#estado-nube'), copiar: $('#copiar-enlace'),
+  vitrinas: $('#vitrinas'), vacio: $('#vacio'), sub: $('#garaje-sub'), nube: $('#estado-nube'),
 };
 
 const enGaraje = (clave) => garaje.some((a) => a.clave === clave);
@@ -35,31 +36,21 @@ function limpiarLista(lista) {
   }));
 }
 
-function respaldar(lista) {
-  try { localStorage.setItem('garaje164.respaldo', JSON.stringify({ fecha: new Date().toISOString(), autos: lista })); } catch { /* sin espacio o modo privado: se sigue sin copia */ }
-}
-
-/* Para recuperar la copia desde la consola del navegador: restaurarRespaldo() */
-function restaurarRespaldo() {
-  try {
-    const copia = JSON.parse(localStorage.getItem('garaje164.respaldo') || 'null');
-    if (!copia?.autos?.length) return 'No hay copia guardada.';
-    garaje = limpiarLista(copia.autos);
-    guardar(); pintarColeccion(); pintarVitrinas({}); refrescarBotones();
-    return `Recuperados ${garaje.length} carros.`;
-  } catch { return 'La copia está dañada.'; }
-}
-window.restaurarRespaldo = restaurarRespaldo;
+const GUARDADO = 'Guardado en tu cuenta. Lo ves igual en todos tus dispositivos.';
 
 function guardar() {
-  guardarGaraje(garaje);
-  if (!nubeDisponible()) return;
   estadoNube('Guardando…');
-  guardarNube(garaje, cargarFondo(), (err, version) => {
-    if (err) { estadoNube('Sin conexión: guardado en este dispositivo, se sube al volver la red.', 'aviso'); return; }
+  guardarNube(garaje, fondo, (err, version) => {
+    if (err) { avisarError(err); return; }
     ultimaVersionNube = version || ultimaVersionNube;
-    estadoNube('Guardado en la nube. Lo ves igual en todos tus dispositivos.', 'ok');
+    estadoNube(GUARDADO, 'ok');
   });
+}
+
+/* Sin sesión (venció o se cerró en otro lado) se recarga y aparece la pantalla de entrada. */
+function avisarError(err) {
+  if (err.estado === 401 || err.estado === 403) { location.reload(); return; }
+  estadoNube(err.estado === 0 ? 'Sin conexión: el cambio se guarda cuando vuelva la red.' : err.message, 'aviso');
 }
 export const guardarTodo = guardar;
 
@@ -70,32 +61,25 @@ function estadoNube(texto, tipo = '') {
 }
 
 async function traerDeLaNube({ primeraVez = false } = {}) {
-  if (!nubeDisponible() || hayPendiente()) return;
+  if (hayPendiente()) return;
   try {
     const remoto = await leerNube();
-    /* Primera vez con la nube: si allá está vacío y aquí ya había carros, se suben estos. */
-    if (primeraVez && !remoto.autos.length && garaje.length) { guardar(); return; }
-    if (remoto.actualizado && remoto.actualizado === ultimaVersionNube) return;
+    cargado = true;
+    if (!primeraVez && remoto.actualizado && remoto.actualizado === ultimaVersionNube) return;
     ultimaVersionNube = remoto.actualizado || '';
-    const nueva = limpiarLista(remoto.autos);
-    /* Si la nube trae menos carros que los de aquí, se guarda una copia de lo que había.
-       Así un borrado por error (o alguien más con el enlace) no se lleva la lista para siempre. */
-    if (nueva.length < garaje.length) respaldar(garaje);
-    garaje = nueva;
-    guardarGaraje(garaje);
-    if (/^(pista|taller|noche|desierto|estudio)$/.test(remoto.fondo || '') && remoto.fondo !== cargarFondo()) guardarFondo(remoto.fondo);
+    garaje = limpiarLista(remoto.autos);
+    if (/^(pista|taller|noche|desierto|estudio)$/.test(remoto.fondo || '')) fondo = remoto.fondo;
     pintarColeccion();
     pintarVitrinas({ encender: primeraVez });
     refrescarBotones();
-    estadoNube('Guardado en la nube. Lo ves igual en todos tus dispositivos.', 'ok');
+    estadoNube(GUARDADO, 'ok');
   } catch (e) {
-    estadoNube(/no existe/.test(e.message) ? 'Ese enlace de garaje no existe. Revisa el enlace del regalo.' : 'Sin conexión con la nube: mostrando lo guardado en este dispositivo.', 'aviso');
+    avisarError(e);
   }
 }
 
 let espera;
-export function iniciarPanel() {
-  ocultarCodigoDelEnlace();
+export async function iniciarPanel() {
   el.q.addEventListener('input', () => {
     clearTimeout(espera);
     espera = setTimeout(() => buscar(el.q.value.trim()), 320);
@@ -103,30 +87,11 @@ export function iniciarPanel() {
   $('#buscador').addEventListener('submit', (e) => { e.preventDefault(); clearTimeout(espera); buscar(el.q.value.trim()); });
   $('#abrir-panel').addEventListener('click', () => { el.panel.classList.add('abierto'); el.q.focus(); });
   $('#panel-cerrar').addEventListener('click', () => el.panel.classList.remove('abierto'));
+  estadoNube('Abriendo tu garaje…');
   pintarColeccion();
-  pintarVitrinas({ encender: true });
-
-  if (nubeDisponible()) {
-    estadoNube('Conectando con tu garaje en la nube…');
-    el.copiar.hidden = false;
-    el.copiar.addEventListener('click', copiarEnlace);
-    traerDeLaNube({ primeraVez: true });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') traerDeLaNube(); });
-    addEventListener('online', () => reintentar((err) => !err && estadoNube('Guardado en la nube. Lo ves igual en todos tus dispositivos.', 'ok')));
-  } else {
-    estadoNube('Se guarda en este navegador.');
-  }
-}
-
-async function copiarEnlace() {
-  const enlace = `${location.origin}${location.pathname}?g=${idGaraje()}`;
-  try {
-    await navigator.clipboard.writeText(enlace);
-    el.copiar.textContent = 'Enlace copiado';
-  } catch {
-    el.copiar.textContent = enlace;
-  }
-  setTimeout(() => { el.copiar.textContent = 'Copiar enlace para otro dispositivo'; }, 2400);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') traerDeLaNube(); });
+  addEventListener('online', () => reintentar((err) => !err && estadoNube(GUARDADO, 'ok')));
+  await traerDeLaNube({ primeraVez: true });
 }
 
 async function buscar(texto) {
@@ -202,7 +167,7 @@ function pintarColeccion() {
     li.append(n, b);
     return li;
   }));
-  el.vacio.hidden = garaje.length > 0;
+  el.vacio.hidden = !cargado || garaje.length > 0;
   el.sub.textContent = garaje.length
     ? `${garaje.length} ${garaje.length === 1 ? 'auto' : 'autos'} en exhibición. Toca una vitrina para entrar al museo de ese auto.`
     : 'Agrega autos desde el panel para llenar las vitrinas.';

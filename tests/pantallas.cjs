@@ -1,8 +1,10 @@
 /* Revisa el garaje y el museo en pantallas de todo tipo: celulares, tablets, laptops y monitores.
-   Uso: servir la carpeta en 127.0.0.1:8164 y correr  node tests/pantallas.cjs carpeta-de-capturas */
+   También la pantalla de entrada (la persiana) sin sesión.
+   Uso: tests/correr.sh tests/pantallas.cjs carpeta-de-capturas */
 const { chromium } = require('playwright');
 const path = require('path');
 const { simular } = require('./simulador.cjs');
+const { BASE, llamar, cuentaNueva, correoUnico } = require('./sesion.cjs');
 
 const OUT = process.argv[2] || 'capturas';
 const PANTALLAS = [
@@ -14,17 +16,42 @@ const PANTALLAS = [
 (async () => {
   const b = await chromium.launch();
   const fallos = [];
+
+  /* Una sola cuenta con 3 carros; cada pantalla reusa su sesión. */
+  const base = await b.newContext();
+  const pb = await base.newPage();
+  await pb.route(/^https:\/\//, simular);
+  await cuentaNueva(pb, correoUnico('pantallas'));
+  await llamar(pb, 'PUT', 'garaje', { fondo: 'pista', autos: [
+    { clave: 'Nissan Skyline GT-R (BNR34)', titulo: 'Nissan Skyline GT-R (BNR34)', foto: 'https://static.wikia.nocookie.net/hotwheels/images/a.png', anio: '2010' },
+    { clave: 'Twin Mill', titulo: 'Twin Mill', foto: 'https://static.wikia.nocookie.net/hotwheels/images/b.png', anio: '1969' },
+    { clave: "'67 Camaro|x.jpg", titulo: "'67 Camaro", foto: 'https://static.wikia.nocookie.net/hotwheels/images/c.png', anio: '2025', color: 'Spectraflame Blue', serie: 'HW Dream Garage' },
+  ] });
+  const sesion = await base.storageState();
+  await base.close();
+
   for (const [nombre, w, h, tactil] of PANTALLAS) {
-    const ctx = await b.newContext({ viewport: { width: w, height: h }, hasTouch: tactil, isMobile: tactil && w < 900 });
+    /* La persiana sin sesión: la placa entera visible o alcanzable con scroll, sin salirse a los lados. */
+    const ctxEntrada = await b.newContext({ viewport: { width: w, height: h }, hasTouch: tactil, isMobile: tactil && w < 900 });
+    const pe = await ctxEntrada.newPage();
+    await pe.goto(BASE, { waitUntil: 'load' });
+    await pe.waitForSelector('#placa:not([hidden])');
+    const placa = await pe.evaluate(() => {
+      const r = document.querySelector('#placa').getBoundingClientRect();
+      return { izq: Math.round(r.left), der: Math.round(innerWidth - r.right), alto: Math.round(r.height) };
+    });
+    if (placa.izq < 8 || placa.der < 8) fallos.push(`${nombre}: la placa de entrada pega con el borde ${JSON.stringify(placa)}`);
+    await pe.locator('[data-paso="entrar"] button[type=submit]').scrollIntoViewIfNeeded();
+    if (!(await pe.locator('[data-paso="entrar"] button[type=submit]').isVisible())) fallos.push(`${nombre}: no se alcanza el botón Entrar`);
+    await pe.screenshot({ path: path.join(OUT, `${nombre}-entrada.png`) });
+    await ctxEntrada.close();
+
+    const ctx = await b.newContext({ viewport: { width: w, height: h }, hasTouch: tactil, isMobile: tactil && w < 900, storageState: sesion });
     const page = await ctx.newPage();
     page.on('pageerror', (e) => fallos.push(`${nombre}: error ${e.message}`));
     await page.route(/^https:\/\//, simular);
-    await page.addInitScript(() => localStorage.setItem('garaje164.autos', JSON.stringify([
-      { clave: 'Nissan Skyline GT-R (BNR34)', titulo: 'Nissan Skyline GT-R (BNR34)', foto: 'https://static.wikia.nocookie.net/hotwheels/images/a.png', anio: '2010' },
-      { clave: 'Twin Mill', titulo: 'Twin Mill', foto: 'https://static.wikia.nocookie.net/hotwheels/images/b.png', anio: '1969' },
-      { clave: "'67 Camaro|x.jpg", titulo: "'67 Camaro", foto: 'https://static.wikia.nocookie.net/hotwheels/images/c.png', anio: '2025', color: 'Spectraflame Blue', serie: 'HW Dream Garage' },
-    ])));
-    await page.goto('http://127.0.0.1:8164/', { waitUntil: 'load' });
+    await page.goto(BASE, { waitUntil: 'load' });
+    await page.waitForSelector('#acceso', { state: 'hidden' });
     await page.waitForTimeout(1200);
     const salidas = async (zona) => page.evaluate((zona) => {
       const ancho = document.documentElement.clientWidth;

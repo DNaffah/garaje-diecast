@@ -6,12 +6,16 @@ Garaje y museo de una colección de autos a escala 1:64. Regalo de cumpleaños.
 - **Garaje:** cada auto en su vitrina, con tira de luz y tramo de pista.
 - **Museo:** al tocar una vitrina, recorrido por etapas con el scroll (fotos del mismo carro real) sobre un escenario al azar, ficha del auto real, versiones de la miniatura (se pueden agregar al garaje) y lo que dice su base.
 
-Sitio estático. La colección se guarda en Supabase para verla igual en todos los dispositivos (con el link del regalo, `?g=…`), y también en el navegador por si no hay conexión.
+Cada persona entra con su cuenta (correo, contraseña y verificación en dos pasos opcional) y tiene su propio garaje, igual en todos sus dispositivos.
 
-## Configurar la nube (una vez)
-1. Crear un proyecto en supabase.com y correr `docs/supabase-garaje.sql` y luego `docs/supabase-endurecer.sql` en el SQL Editor.
-2. Poner la Project URL y la Publishable key en `js/config.js` (nunca la secret).
-3. El primer SQL devuelve el link del regalo.
+- `sitio/`: lo que se publica (HTML, CSS y JS sin build).
+- `servidor/app.js`: la API `/api/*` que corre en Cloudflare Pages Functions. Es lo único que habla con Supabase; la sesión va en cookies HttpOnly.
+- `docs/supabase-cuentas.sql`: tablas, funciones y permisos en Supabase.
+
+Datos personales: ver `sitio/privacidad.html`. Seguridad: `docs/SECURITY.md`.
+
+## Puesta en marcha (una vez)
+Ver `docs/DESPLIEGUE.md`: Supabase (SQL, correo y claves) y Cloudflare Pages (carpeta `sitio`, variables de entorno). Los scripts de `docs/historico/` son del esquema viejo y no se deben correr.
 
 ## Fuentes de datos (todas públicas y de solo lectura)
 
@@ -24,25 +28,24 @@ Sitio estático. La colección se guarda en Supabase para verla igual en todos l
 
 Hot Wheels es una marca de Mattel. Este proyecto es un regalo personal, no comercial y sin relación con la marca; no usa su logo.
 
-## Correr en local
+## Correr y probar en local
 
 ```bash
-python3 -m http.server 8164 --bind 127.0.0.1
-# abrir http://127.0.0.1:8164/
+npm install --prefix .herramientas wrangler@3.114.17
+node tests/supabase-falso.cjs 54321 &        # Supabase de mentira, solo 127.0.0.1
+tests/servidor-local.sh                      # el sitio en http://127.0.0.1:8788
+tests/correr.sh tests/cuentas.cjs capturas   # cuentas, sesión, 2FA, regalo, aislamiento
+tests/correr.sh tests/e2e.cjs capturas       # garaje y museo
+tests/correr.sh tests/pantallas.cjs capturas # 10 tamaños de pantalla
+tests/sql/probar.sh                          # el SQL en un PostgreSQL desechable
 ```
 
-## Pruebas
-
-```bash
-NODE_PATH=$(npm root -g) node tests/e2e.cjs capturas
-```
-
-Usa Playwright con respuestas simuladas de las APIs (no necesita red). Ver `docs/TESTING.md`.
+Ver `docs/TESTING.md`.
 
 ## Licencias
 
-Fuentes Big Shoulders Display y Figtree: SIL Open Font License 1.1, servidas desde `fonts/` (textos de licencia en `fonts/OFL-*.txt`).
+Fuentes Big Shoulders Display y Figtree: SIL Open Font License 1.1, servidas desde `sitio/fonts/` (textos de licencia en `sitio/fonts/OFL-*.txt`).
 
 ## Licencia del código
 
-MIT aplica solo al código propio (ver `LICENSE`). Las fuentes de `fonts/` están bajo SIL OFL 1.1. Los textos, fichas e imágenes que se muestran pertenecen a sus autores y se rigen por sus licencias (CC BY-SA 3.0/4.0 o la licencia de cada archivo de Commons).
+MIT aplica solo al código propio (ver `LICENSE`). Las fuentes de `sitio/fonts/` están bajo SIL OFL 1.1. Los textos, fichas e imágenes que se muestran pertenecen a sus autores y se rigen por sus licencias (CC BY-SA 3.0/4.0 o la licencia de cada archivo de Commons).

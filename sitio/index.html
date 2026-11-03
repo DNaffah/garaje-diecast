@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: https://static.wikia.nocookie.net https://upload.wikimedia.org https://thumb.wikimedia.org; connect-src 'self' https://hotwheels.fandom.com https://es.wikipedia.org https://en.wikipedia.org https://commons.wikimedia.org; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; media-src 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin">
+<title>Garaje 1:64</title>
+<meta name="description" content="Garaje y museo de una colección de autos a escala 1:64.">
+<link rel="preload" href="fonts/big-shoulders-display-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/fuentes.css">
+<link rel="stylesheet" href="css/estilos.css">
+<link rel="stylesheet" href="css/acceso.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2317181B'/%3E%3Cpath d='M5 21h22M8 21l3-6h9l4 6' stroke='%23FF6A13' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='11' cy='22' r='2.5' fill='%23C9CDD2'/%3E%3Ccircle cx='21' cy='22' r='2.5' fill='%23C9CDD2'/%3E%3C/svg%3E">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<a class="saltar" href="#garaje">Ir al garaje</a>
+
+<section class="acceso" id="acceso" aria-labelledby="acceso-titulo">
+  <div class="persiana" aria-hidden="true"><span class="manija"></span></div>
+  <div class="placa-acceso" id="placa" hidden>
+    <p class="marca">Garaje <span>1:64</span></p>
+    <h1 id="acceso-titulo">Entrar al garaje</h1>
+    <p class="acceso-nota" id="acceso-nota" role="status" hidden></p>
+
+    <form class="paso" data-paso="entrar" data-titulo="Entrar al garaje" novalidate hidden>
+      <label for="entrar-correo">Correo</label>
+      <input id="entrar-correo" name="correo" type="email" autocomplete="username" inputmode="email" spellcheck="false" maxlength="254" required>
+      <label for="entrar-clave">Contraseña</label>
+      <div class="campo-clave">
+        <input id="entrar-clave" name="clave" type="password" autocomplete="current-password" maxlength="200" required>
+        <button type="button" class="ver-clave" data-para="entrar-clave" aria-pressed="false" aria-label="Ver u ocultar la contraseña">Ver</button>
+      </div>
+      <p class="acceso-error" role="alert"></p>
+      <button type="submit" class="boton-principal">Entrar</button>
+      <div class="acceso-enlaces">
+        <button type="button" class="enlace" data-ir="olvide">Olvidé mi contraseña</button>
+        <button type="button" class="enlace" data-ir="crear">Crear cuenta</button>
+      </div>
+    </form>
+
+    <form class="paso" data-paso="crear" data-titulo="Crear tu garaje" novalidate hidden>
+      <label for="crear-correo">Correo</label>
+      <input id="crear-correo" name="correo" type="email" autocomplete="email" inputmode="email" spellcheck="false" maxlength="254" required>
+      <label for="crear-clave">Contraseña</label>
+      <div class="campo-clave">
+        <input id="crear-clave" name="clave" type="password" autocomplete="new-password" maxlength="72" required aria-describedby="reglas-crear">
+        <button type="button" class="ver-clave" data-para="crear-clave" aria-pressed="false" aria-label="Ver u ocultar la contraseña">Ver</button>
+      </div>
+      <ul class="reglas" id="reglas-crear" data-para="crear-clave">
+        <li data-regla="largo">10 caracteres o más</li>
+        <li data-regla="letras">Letras</li>
+        <li data-regla="numeros">Números</li>
+      </ul>
+      <label class="casilla">
+        <input type="checkbox" name="acepto" required>
+        <span>Soy mayor de edad (o tengo autorización de mi representante legal) y autorizo el tratamiento de mi correo, mi garaje y los datos técnicos de seguridad para crear, proteger y sincronizar mi cuenta, incluido su envío a proveedores fuera de Colombia, según la <a href="privacidad.html" target="_blank" rel="noopener">política de datos</a>.</span>
+      </label>
+      <p class="acceso-error" role="alert"></p>
+      <button type="submit" class="boton-principal">Crear cuenta</button>
+      <div class="acceso-enlaces">
+        <button type="button" class="enlace" data-ir="entrar">Ya tengo cuenta</button>
+      </div>
+    </form>
+
+    <form class="paso" data-paso="verificar" data-titulo="Revisa tu correo" novalidate hidden>
+      <p class="acceso-texto">Te enviamos un código de 6 números a <strong data-correo></strong>. Si no aparece, mira en spam.</p>
+      <label for="verificar-codigo">Código</label>
+      <input id="verificar-codigo" class="codigo" name="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false" required>
+      <div class="solo-sin-clave paso-campo">
+        <label for="verificar-clave">Tu contraseña</label>
+        <input id="verificar-clave" name="clave" type="password" autocomplete="current-password" maxlength="200">
+      </div>
+      <p class="acceso-error" role="alert"></p>
+      <button type="submit" class="boton-principal">Confirmar correo</button>
+      <div class="acceso-enlaces">
+        <button type="button" class="enlace" id="reenviar-registro">Enviar otro código</button>
+        <button type="button" class="enlace" data-ir="crear">Cambiar correo</button>
+      </div>
+    </form>
+
+    <form class="paso" data-paso="olvide" data-titulo="Recuperar la contraseña" novalidate hidden>
+      <p class="acceso-texto">Escribe el correo de tu cuenta y te mandamos un código para poner una contraseña nueva.</p>
+      <label for="olvide-correo">Correo</label>
+      <input id="olvide-correo" name="correo" type="email" autocomplete="email" inputmode="email" spellcheck="false" maxlength="254" required>
+      <p class="acceso-error" role="alert"></p>
+      <button type="submit" class="boton-principal">Enviar código</button>
+      <div class="acceso-enlaces">
+        <button type="button" class="enlace" data-ir="entrar">Volver a entrar</button>
+      </div>
+    </form>
+
+    <form class="paso" data-paso="restablecer" data-titulo="Contraseña nueva" novalidate hidden>
+      <p class="acceso-texto">Si <strong data-correo></strong> tiene cuenta, le llegó un código de 6 números.</p>
+      <label for="restablecer-codigo">Código</label>
+      <input id="restablecer-codigo" class="codigo" name="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false" required>
+      <label for="restablecer-clave">Contraseña nueva</label>
+      <div class="campo-clave">
+        <input id="restablecer-clave" name="clave" type="password" autocomplete="new-password" maxlength="72" required aria-describedby="reglas-restablecer">
+        <button type="button" class="ver-clave" data-para="restablecer-clave" aria-pressed="false" aria-label="Ver u ocultar la contraseña">Ver</button>
+      </div>
+      <ul class="reglas" id="reglas-restablecer" data-para="restablecer-clave">
+        <li data-regla="largo">10 caracteres o más</li>
+        <li data-regla="letras">Letras</li>
+        <li data-regla="numeros">Números</li>
+      </ul>
+      <p class="acceso-error" role="alert"></p>
+      <button type="submit" class="boton-principal">Guardar contraseña nueva</button>
+      <div class="acceso-enlaces">
+        <button type="button" class="enlace" id="reenviar-recuperar">Enviar otro código</button>
+        <button type="button" class="enlace" data-ir="entrar">Volver a entrar</button>
+      </div>
+    </form>
+
+    <form class="paso" data-paso="dospasos" data-titulo="Código de doble paso" novalidate hidden>
+      <p class="acceso-texto">Abre tu app de autenticación y escribe el código de 6 números del Garaje 1:64.</p>
+      <label for="dospasos-codigo">Código de la app</label>
+      <input id="dospasos-codigo" class="codigo" name="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false" required>
+      <p class="acceso-error" role="alert"></p>
+      <button type="submit" class="boton-principal">Entrar</button>
+      <div class="acceso-enlaces">
+        <button type="button" class="enlace" id="dospasos-salir">Usar otra cuenta</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<div class="app" id="app" hidden>
+  <aside class="panel" id="panel" aria-label="Tu colección">
+    <div class="panel-cabeza">
+      <p class="marca">Garaje <span>1:64</span></p>
+      <button class="panel-cerrar" type="button" id="panel-cerrar" aria-label="Cerrar el buscador">×</button>
+    </div>
+
+    <form class="buscador" id="buscador" role="search">
+      <label for="q">Buscar un modelo</label>
+      <input id="q" name="q" type="search" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Skyline, Twin Mill, '67 Camaro…">
+    </form>
+
+    <div class="resultados" id="resultados" aria-live="polite">
+      <p class="pista-texto">Escribe el nombre que trae el blíster. La búsqueda va directo a la Hot Wheels Wiki.</p>
+    </div>
+
+    <section class="coleccion" aria-labelledby="titulo-coleccion">
+      <h2 id="titulo-coleccion">En el garaje <span class="contador" id="contador">0</span></h2>
+      <ul class="lista-coleccion" id="lista-coleccion"></ul>
+      <p class="estado-nube" id="estado-nube" role="status"></p>
+    </section>
+
+    <div class="cuenta-mini">
+      <span class="cuenta-mini-correo" id="cuenta-correo"></span>
+      <button type="button" class="volver" id="abrir-cuenta">Tu cuenta</button>
+    </div>
+  </aside>
+
+  <main class="garaje" id="garaje" tabindex="-1">
+    <header class="garaje-cabeza">
+      <div>
+        <h1>Garaje</h1>
+        <p class="garaje-sub" id="garaje-sub">Toca una vitrina para entrar al museo de ese auto.</p>
+      </div>
+      <button class="boton-panel" type="button" id="abrir-panel">Agregar autos</button>
+    </header>
+    <p class="aviso-cuenta" id="aviso-cuenta" role="status" hidden></p>
+
+    <div class="pared">
+      <ol class="vitrinas" id="vitrinas" aria-label="Autos en el garaje"></ol>
+      <div class="vacio" id="vacio" hidden>
+        <svg viewBox="0 0 240 90" aria-hidden="true"><path d="M10 70h220" class="vacio-pista"/><path d="M60 70l14-22h52l22 22" class="vacio-auto"/><circle cx="82" cy="72" r="9" class="vacio-rueda"/><circle cx="146" cy="72" r="9" class="vacio-rueda"/></svg>
+        <p><strong>Las vitrinas están vacías.</strong></p>
+        <p>Busca un modelo en el panel y agrégalo. Se guarda en tu cuenta.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="museo" id="museo" hidden aria-modal="true" role="dialog" aria-labelledby="museo-titulo">
+  <div class="museo-barra">
+    <button type="button" class="volver" id="volver">Volver al garaje</button>
+    <button type="button" class="sacar-museo" id="sacar-museo">Sacar del garaje</button>
+  </div>
+
+  <section class="recorrido" id="recorrido" aria-label="Recorrido por el auto">
+    <div class="escenario" id="escenario">
+      <div class="fondo" id="fondo"></div>
+      <div class="escenario-grid">
+        <header class="escenario-info">
+          <p class="museo-tipo" id="museo-tipo"></p>
+          <h2 id="museo-titulo"></h2>
+        </header>
+        <figure class="marco" id="marco"></figure>
+        <aside class="panel-datos" aria-label="Características">
+          <div class="etapa-cabeza">
+            <span class="contador-etapa" id="contador-etapa"></span>
+            <span class="etapa" id="etapa"></span>
+          </div>
+          <div class="barra-etapa"><span id="barra-etapa"></span></div>
+          <ol class="datos-recorrido" id="datos-recorrido"></ol>
+          <p class="credito-foto" id="credito-foto"></p>
+          <button type="button" class="elegir-foto" id="elegir-foto" hidden>Cambiar foto</button>
+        </aside>
+      </div>
+      <p class="desliza" id="desliza">Desliza para recorrerlo</p>
+    </div>
+  </section>
+
+  <div class="museo-salas">
+    <section class="sala sala-real" id="sala-real"></section>
+    <section class="sala sala-mini" id="sala-mini"></section>
+    <section class="sala sala-base" id="sala-base"></section>
+    <footer class="creditos" id="creditos"></footer>
+    <p class="privacidad">Privacidad: el sitio solo guarda tu correo, tu contraseña cifrada y tu lista de carros, y usa dos cookies técnicas para mantener tu sesión. No hay analítica ni rastreadores. Para mostrar los carros, tu navegador se conecta a la Hot Wheels Wiki (Fandom), a Wikipedia y a Wikimedia, que ven tu dirección IP como cualquier web. Puedes borrar tu cuenta y tu garaje desde "Tu cuenta". Detalles en la <a href="privacidad.html" target="_blank" rel="noopener">política de datos</a>.</p>
+  </div>
+
+  <dialog class="selector-fotos" id="selector-fotos" aria-labelledby="selector-titulo">
+    <div class="selector-cabeza">
+      <h3 id="selector-titulo">Elige la foto principal</h3>
+      <button type="button" class="volver" id="cerrar-selector">Cerrar</button>
+    </div>
+    <p class="nota-idioma">Solo aparecen fotos que nombran este modelo y su generación. La que elijas queda guardada en tu garaje.</p>
+    <div class="rejilla-fotos" id="rejilla-fotos"></div>
+  </dialog>
+</div>
+
+<dialog class="cuenta" id="cuenta" aria-labelledby="cuenta-titulo">
+  <div class="selector-cabeza">
+    <h3 id="cuenta-titulo">Tu cuenta</h3>
+    <button type="button" class="volver" id="cerrar-cuenta">Cerrar</button>
+  </div>
+  <p class="cuenta-correo" id="cuenta-correo-dialogo"></p>
+
+  <section class="cuenta-bloque" aria-labelledby="titulo-2fa">
+    <h4 id="titulo-2fa">Verificación en dos pasos</h4>
+    <p class="cuenta-texto" id="estado-2fa"></p>
+    <button type="button" class="boton-secundario" id="activar-2fa">Activar con una app</button>
+    <form id="form-confirmar-2fa" class="cuenta-form" novalidate hidden>
+      <p class="cuenta-texto">Escanea el código con Google Authenticator, Microsoft Authenticator o similar. Si no puedes escanear, escribe esta clave en la app:</p>
+      <div class="qr-zona">
+        <img id="qr-2fa" alt="Código QR para la app de autenticación" width="168" height="168">
+        <span class="secreto" id="secreto-2fa"></span>
+      </div>
+      <label for="confirmar-2fa-codigo">Código que muestra la app</label>
+      <input id="confirmar-2fa-codigo" class="codigo" name="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false" required>
+      <p class="acceso-error" role="alert"></p>
+      <button type="submit" class="boton-principal">Confirmar y activar</button>
+    </form>
+    <form id="form-quitar-2fa" class="cuenta-form" novalidate hidden>
+      <label for="quitar-2fa-codigo">Para desactivarla, escribe el código de la app</label>
+      <input id="quitar-2fa-codigo" class="codigo" name="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false" required>
+      <p class="acceso-error" role="alert"></p>
+      <button type="submit" class="boton-secundario">Desactivar</button>
+    </form>
+  </section>
+
+  <section class="cuenta-bloque">
+    <button type="button" class="boton-secundario" id="salir">Cerrar sesión</button>
+  </section>
+
+  <section class="cuenta-bloque peligro" aria-labelledby="titulo-borrar">
+    <h4 id="titulo-borrar">Borrar cuenta</h4>
+    <p class="cuenta-texto">Se borran tu cuenta, tu garaje y tu correo. Solo queda, seudonimizada, la prueba de que aceptaste la política. No se puede deshacer.</p>
+    <form id="form-borrar" class="cuenta-form" novalidate>
+      <label for="borrar-clave">Tu contraseña</label>
+      <input id="borrar-clave" name="clave" type="password" autocomplete="current-password" maxlength="200" required>
+      <label for="borrar-confirmar">Escribe BORRAR para confirmar</label>
+      <input id="borrar-confirmar" name="confirmar" type="text" autocomplete="off" spellcheck="false" maxlength="10" required>
+      <p class="acceso-error" role="alert"></p>
+      <button type="submit" class="boton-peligro">Borrar mi cuenta y mi garaje</button>
+    </form>
+  </section>
+
+  <p class="cuenta-pie"><a href="privacidad.html" target="_blank" rel="noopener">Política de tratamiento de datos</a></p>
+</dialog>
+
+<div class="nota" id="nota" role="status" hidden>
+  <p id="nota-texto"></p>
+  <button type="button" id="nota-cerrar">Seguir</button>
+</div>
+</body>
+</html>

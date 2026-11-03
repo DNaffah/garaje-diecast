@@ -1,3 +1,6 @@
 capturas/
 node_modules/
+.herramientas/
+.wrangler/
+.dev.vars
 .DS_Store

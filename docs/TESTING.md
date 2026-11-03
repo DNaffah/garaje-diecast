@@ -50,3 +50,15 @@ Se anota en cada entrega: fecha, qué pasó, qué falló y cómo se corrigió.
   - B6 `decodeURIComponent` sin try → `decodificar`.
   - I2, I3, I5, I6: fondo validado y evento muerto quitado; tope de 300 carros en el cliente; enlace de licencia solo a CC/Wikimedia; `blob:` fuera de la CSP.
   - B7 (origen compartido en github.io) queda como riesgo aceptado en `SECURITY.md`.
+
+### 2026-11-02 · cuarta entrega (cuentas de usuario, talla L)
+- **A técnica:**
+  - `tests/cuentas.cjs` (12 escenarios contra wrangler local y Supabase falso): registro con errores de antes, código falso, cookie HttpOnly/Secure/Strict, nada en localStorage, carro guardado en la cuenta, aislamiento entre cuentas, CSRF, datos inválidos, activar 2FA, entrar con 2FA (la API niega el garaje con solo la contraseña), recuperar con 2FA, límite de intentos, link del regalo, registro previo del correo ajeno y borrado de cuenta.
+  - `tests/e2e.cjs` y `tests/pantallas.cjs` (10 tamaños, también la persiana sin sesión) entran ahora con cuenta.
+  - `tests/sql/probar.sh`: el SQL en PostgreSQL 16 real con un `auth` como el de Supabase, corrido dos veces.
+- **B usuario simulado:** en el PC del dueño, con wrangler y la wiki real: crear cuenta, confirmar con código, la persiana sube, agregar el R34, recargar y seguir conectado con el carro guardado. Consola sin errores.
+- **C seguridad, tres revisiones aparte en paralelo:**
+  - Accesos y sesiones: A1 (registrar primero un correo ajeno y quedarse con la cuenta) arreglado y probado; A2 (clave pública ya publicada) se resuelve rotándola; M1 (IP compartida de Cloudflare y sesiones borradas ante un 429) arreglado con `Sb-Forwarded-For` y 503 sin borrar la sesión; B1 a B4 arreglados (límites por fallos, IPv6 /64, 2FA contada por la cuenta validada, respuestas en el mismo tiempo, `Content-Length`).
+  - Datos y despliegue: regex `{1,600}` inválida en Postgres (ningún garaje se podía guardar; también en el script viejo) arreglada y probada en Postgres real; mezcla del regalo que perdía carros sin clave arreglada; scripts viejos bajo candado en `docs/historico/`; carrera del límite de intentos con candado; sesión revisada en `auth.sessions`; claves cruzadas rechazadas; `.gitignore` y cabeceras de `/privacidad` corregidos.
+  - Legal (Ley 1581): política completa (vigencia, derechos y plazos, encargados y transmisión, cookies, conservación), casilla con edad y alcance, prueba de autorización anotada por la base y conservada 3 años como huella, limpieza diaria. Pendiente del dueño: datos del responsable, región de Supabase y proveedor de correo.
+- **Lección:** el Supabase falso no reproduce todo (la contraseña de un registro repetido, la regex de Postgres). Por eso ahora hay prueba contra Postgres real y queda la prueba en vivo contra Supabase antes de entregar.

@@ -1,3 +1,6 @@
+-- HISTÓRICO: esquema viejo, sin cuentas. No correr: usar docs/supabase-cuentas.sql.
+do $$ begin raise exception 'Script histórico: no correr. Usar docs/supabase-cuentas.sql'; end $$;
+
 -- Garaje 1:64 · ejecutar UNA vez en Supabase → SQL Editor → Run
 -- Crea la tabla del garaje y dos funciones. Nadie puede leer ni tocar la tabla directo:
 -- solo se lee o guarda un garaje si se conoce su código (un UUID imposible de adivinar).

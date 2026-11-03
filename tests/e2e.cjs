@@ -1,12 +1,13 @@
-/* Prueba completa en Chromium con las APIs simuladas, sin internet.
-   Uso: servir la carpeta en 127.0.0.1:8164 y correr  node tests/e2e.cjs carpeta-de-capturas */
+/* Prueba completa en Chromium con las APIs simuladas, sin internet. Entra con una cuenta
+   nueva y guarda en el servidor local (wrangler + Supabase falso).
+   Uso: tests/correr.sh tests/e2e.cjs carpeta-de-capturas */
 const { chromium } = require('playwright');
 const path = require('path');
 
-const BASE = 'http://127.0.0.1:8164/';
 const OUT = process.argv[2] || 'capturas';
 
 const { simular } = require('./simulador.cjs');
+const { BASE, llamar, cuentaNueva, correoUnico } = require('./sesion.cjs');
 
 (async () => {
   const b = await chromium.launch();
@@ -16,11 +17,12 @@ const { simular } = require('./simulador.cjs');
     const page = await ctx.newPage();
     const errores = [];
     page.on('pageerror', (e) => errores.push(e.message));
-    page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.g/.test(m.text())) errores.push(m.text()); });
+    page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.g|Failed to load resource/.test(m.text())) errores.push(m.text()); });
     page.on('dialog', (d) => { errores.push('Se abrió un diálogo: ' + d.message()); d.dismiss(); });
     await page.route(/^https:\/\/(?!fonts\.)/, simular);
     await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
-    await page.goto(BASE, { waitUntil: 'load' });
+    await cuentaNueva(page, correoUnico(nombre));
+    await page.waitForTimeout(400);
 
     if (!(await page.isVisible('#vacio'))) fallos.push(`${nombre}: no se ve el estado vacío`);
     await page.screenshot({ path: path.join(OUT, `${nombre}-0-vacio.png`) });
@@ -48,11 +50,11 @@ const { simular } = require('./simulador.cjs');
     if ((await page.locator('.vitrina').count()) !== 3) fallos.push(`${nombre}: la colección no se recordó al recargar`);
 
     /* Una foto guardada con un % suelto no debe dejar el museo colgado. */
-    const fotoReal = (v) => page.evaluate((x) => {
-      const l = JSON.parse(localStorage.getItem('garaje164.autos'));
-      l[0].fotoReal = x;
-      localStorage.setItem('garaje164.autos', JSON.stringify(l));
-    }, v);
+    const fotoReal = async (v) => {
+      const g = (await llamar(page, 'GET', 'garaje')).datos;
+      g.autos[0].fotoReal = v;
+      await llamar(page, 'PUT', 'garaje', { autos: g.autos, fondo: g.fondo });
+    };
     await fotoReal('https://upload.wikimedia.org/a/%E0b');
     await page.reload({ waitUntil: 'load' });
     await page.locator('.vitrina-boton').first().click();
@@ -87,7 +89,8 @@ const { simular } = require('./simulador.cjs');
       await page.screenshot({ path: path.join(OUT, `${nombre}-5-selector.png`) });
       await page.locator('.opcion-foto').nth(1).click();
       await page.waitForTimeout(300);
-      const guardada = await page.evaluate(() => JSON.parse(localStorage.getItem('garaje164.autos'))[0].fotoReal);
+      await page.waitForTimeout(1000);
+      const guardada = (await llamar(page, 'GET', 'garaje')).datos.autos[0].fotoReal;
       if (!guardada) fallos.push(`${nombre}: la foto elegida no quedó guardada`);
     } else fallos.push(`${nombre}: no aparece el botón Elegir otra foto`);
     await page.evaluate(() => { const m = document.querySelector('#museo'); m.scrollTop = document.querySelector('#recorrido').offsetHeight; });

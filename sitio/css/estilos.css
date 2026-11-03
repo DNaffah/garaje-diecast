@@ -96,8 +96,6 @@ h1, h2, h3 { font-family: var(--f-titulo); font-weight: 800; line-height: 1; mar
 .estado-nube { margin: 10px 0 0; font-size: 12px; color: var(--tenue); line-height: 1.4; }
 .estado-nube[data-tipo="ok"]::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #3fbf7f; margin-right: 6px; vertical-align: 1px; }
 .estado-nube[data-tipo="aviso"] { color: #ffb38a; }
-.copiar-enlace { margin-top: 8px; min-height: 36px; padding: 0 12px; background: none; border: 1px solid var(--linea); border-radius: var(--radio); font-size: 13px; font-weight: 600; color: var(--tinta); text-align: left; overflow-wrap: anywhere; }
-.copiar-enlace:hover { border-color: var(--pista); }
 
 /* Garaje */
 .garaje {

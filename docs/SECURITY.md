@@ -1,37 +1,49 @@
 # Seguridad
 
 ## Qué hay que proteger
-- Un sitio estático en GitHub Pages: no hay servidor propio, cuentas, contraseñas ni pagos.
-- La lista de carros del garaje, guardada en Supabase. No tiene datos personales: solo nombres de modelos y enlaces a fotos.
-- El código del garaje (un UUID que va en el link del regalo). Quien lo tenga puede ver y editar ese garaje, y nada más.
+- Las cuentas: correo y contraseña (cifrada por Supabase con bcrypt), y el factor de la 2FA.
+- El garaje de cada cuenta. Solo su dueño lo puede ver o cambiar.
+- La prueba de la autorización de datos (Ley 1581).
+- Las claves de Supabase. La pública y la secreta viven solo en Cloudflare, como variables de entorno; nunca en el repo ni en la página.
+
+## Arquitectura
+Navegador → Cloudflare Pages (`sitio/` + `servidor/app.js` en `/api/*`) → Supabase (Auth y funciones SQL). La página nunca habla con Supabase ni ve un token.
 
 ## Controles
 | Riesgo | Control |
 |---|---|
-| Texto de terceros hecho para trabar la pestaña (ReDoS) | `<ref>` y comentarios se quitan con un recorrido lineal (`sinRefs`); las demás regex tienen cuantificadores con tope; el wikitexto se corta a 150 000 caracteres. Probado con 2 MB de texto armado a propósito: menos de 20 ms |
-| Entidades o nombres de archivo mal formados | Entidades fuera de Unicode se descartan; `decodificar` no lanza error con un `%` suelto |
-| Inyección de HTML o scripts desde la wiki, Wikipedia o Commons | Todo se limpia a texto y se pinta con `textContent`. No hay `innerHTML` en el proyecto. El HTML de autores de Commons pasa por `DOMParser` y solo se usa su texto |
-| Cargar scripts o recursos de terceros | CSP en `<meta>` con `default-src 'none'` y lista cerrada por tipo: scripts, estilos y fuentes solo del propio sitio; imágenes solo de Fandom y Wikimedia; conexiones solo a la wiki, Wikipedia, Commons y el proyecto exacto de Supabase. Sin `object`, `frame`, `worker` ni `form-action` |
-| Fuentes de Google (rastreo de IP) | Fuentes servidas desde el propio sitio (`fonts/`, licencia SIL OFL 1.1) |
-| Clickjacking (meter la página en un iframe) | GitHub Pages no deja enviar `frame-ancestors`; `main.js` deja la página en blanco si está dentro de otra |
-| Filtrar el código del garaje | `referrer: strict-origin` (a otros sitios solo llega el dominio) y el `?g=` se quita de la barra de direcciones apenas se guarda en el dispositivo |
-| Lectura o escritura masiva en Supabase | RLS activado y sin permisos sobre la tabla (probado: lectura directa responde 401). Solo dos funciones `security definer` con `search_path` vacío: `leer_garaje` y `guardar_garaje`, que exigen el UUID exacto. Solo `anon` puede ejecutarlas: se les quita el permiso a `public` y a `authenticated` |
-| Datos basura o enlaces raros guardados por quien tenga el link | `guardar_garaje` valida tamaño (máx. 300 carros), campos permitidos, largo de textos, años de 4 cifras y que las fotos sean solo de Fandom o Wikimedia (`docs/supabase-endurecer.sql`). El navegador vuelve a validar todo al cargar (`limpiarLista`, `imagenSegura`) |
-| Usar una clave secreta en el navegador | `nube.js` ignora claves `sb_secret_` y JWT con rol distinto de `anon`. En `config.js` solo va la Publishable key, pública por diseño |
-| Datos manipulados en `localStorage` | Se validan tipo, largo y host de cada campo al cargar |
-| Abuso de las APIs públicas | Búsqueda con espera de 320 ms, máximo 60 caracteres, cancelación de búsquedas viejas y caché en memoria; las respuestas de error de MediaWiki no se guardan |
-| Borrar un carro por accidente | "Sacar" pide un segundo toque de confirmación. Si la nube trae menos carros que los del dispositivo, antes se guarda una copia local (`garaje164.respaldo`, se recupera con `restaurarRespaldo()` en la consola) |
-| Enlace de licencia manipulado en Commons | Solo se enlaza si apunta a creativecommons.org, wikimedia.org o wikipedia.org |
-| Enlaces externos | `target="_blank"` con `rel="noopener noreferrer"`, solo `https` |
+| Robo de sesión por XSS | Sesión en cookies `__Host-` HttpOnly, Secure, SameSite=Strict que pone el servidor. No hay `innerHTML`; CSP `default-src 'none'` con lista cerrada por tipo (cabeceras en `sitio/_headers` y `<meta>`) |
+| CSRF | SameSite=Strict, y además todo lo que cambia algo exige `Origin` igual al sitio, la cabecera `X-Garaje: 1` y JSON (`mismoOrigen`) |
+| IDOR, ver o tocar el garaje de otro | Las funciones SQL usan `auth.uid()` y no reciben el id del garaje propio. RLS activo, tablas sin permisos directos, `security definer` con `search_path = ''`. Probado contra PostgreSQL real (`tests/sql/probar.sh`) |
+| Saltarse la 2FA | `sesion_completa()` exige aal2 en la base cuando la cuenta tiene un factor verificado. Supabase además exige aal2 para cambiar la contraseña o quitar el factor |
+| Token robado después de cerrar sesión | `sesion_completa()` revisa que la sesión siga viva en `auth.sessions` |
+| Registrar primero el correo de otra persona | Al confirmar el código se vuelve a fijar la contraseña de quien confirma; la del primer registro deja de servir (probado en `tests/cuentas.cjs`) |
+| Fuerza bruta | Límites por IP (IPv6 por red /64) y por cuenta en entrar, registro, códigos, recuperación, 2FA y borrado (`permitir_intento`, con candado contra ráfagas). Los límites por cuenta solo cuentan fallos, para que nadie bloquee a otro con solo saber su correo. Supabase recibe la IP real (`Sb-Forwarded-For`) |
+| Saber qué correos tienen cuenta | Registro, reenvío y recuperación responden igual y en el mismo tiempo: el correo se manda después de responder |
+| Caída o saturación de Supabase | Si Supabase responde 429 o 5xx, la sesión no se borra: se responde 503 y se reintenta |
+| Contraseñas débiles | Mínimo 10 caracteres, letras y números, máximo 72 bytes (límite de bcrypt), en el servidor y en Supabase |
+| Datos basura o enlaces raros en el garaje | `autos_validos()` en la base: campos permitidos, solo texto, largos máximos, años de 4 cifras y fotos solo de Fandom o Wikimedia. El navegador vuelve a validar al cargar |
+| Claves cruzadas al configurar | El servidor no arranca si la clave pública no es publishable/anon o la secreta no es secret/service_role |
+| Texto de terceros hecho para trabar la pestaña (ReDoS) | Limpieza lineal de `<ref>` y comentarios, cuantificadores con tope y wikitexto cortado a 150 000 caracteres |
+| Clickjacking | `frame-ancestors 'none'` y `X-Frame-Options: DENY`; `main.js` además deja la página en blanco dentro de un iframe |
+| Cuerpos enormes | Se revisa `Content-Length` antes de leer: 4 KB para auth, 320 KB para el garaje |
+| Scripts de base viejos | `docs/historico/` corta con error si alguien los corre |
 
 ## Riesgo aceptado
-- El UUID del garaje se guarda en `localStorage` para no tener que abrir el link en cada visita. Un script inyectado podría leerlo, pero la CSP no permite scripts externos ni en línea y no hay `innerHTML`. El impacto máximo sería editar una lista de carros de juguete. Si el link se filtra, se crea un garaje nuevo con el SQL y se manda el link nuevo.
-- La Publishable key de Supabase es pública (así funciona Supabase); la protección está en RLS y en las funciones.
-- GitHub Pages pone todos los repos del usuario en el mismo origen (`usuario.github.io`), así que otra página suya podría leer el `localStorage`. Hoy no hay otras páginas con scripts de terceros; si algún día las hay, conviene mover este sitio a un dominio propio.
-- Quien tenga el link puede reemplazar la lista (es lo que se busca: que él la edite desde cualquier dispositivo). La copia local cubre el caso de un borrado.
-- Algunos navegadores guardan en el historial la URL original con `?g=`, aunque luego se quite de la barra.
+- El link del regalo (`?g=`) es de un solo uso: la primera cuenta que lo use se queda con ese garaje. Se manda solo al dueño.
+- La clave pública de Supabase estuvo publicada en la versión de GitHub Pages. Hay que rotarla (crear una nueva, borrar la vieja y desactivar las claves legacy) antes de abrir el registro: ver `docs/DESPLIEGUE.md`.
+- Sin Turnstile ni regla de Rate Limiting de Cloudflare: los límites viven en la base. Si el sitio se abre a más gente, agregarlos.
+- Las vistas previas de Cloudflare no tienen variables de entorno (solo Production), así que no funcionan con datos reales.
+
+## Si pasa un incidente
+1. **Contener:** pausar el proyecto de Cloudflare Pages o quitar sus variables de entorno.
+2. **Rotar:** claves de Supabase (publishable y secret) y, si hizo falta, la contraseña del correo de envío. Cerrar todas las sesiones desde Supabase → Authentication.
+3. **Revisar:** logs de Auth de Supabase y logs de Cloudflare para saber qué cuentas y datos se tocaron.
+4. **Avisar:** por correo a las personas afectadas, y a la Superintendencia de Industria y Comercio dentro de los 15 días hábiles siguientes a detectarlo.
+5. **Registrar:** qué pasó, cuándo, qué se hizo y qué cambia para que no se repita (en este archivo).
 
 ## Privacidad y legal
-- Sin cookies, analítica ni rastreadores. La página lo dice al pie, junto con a qué servicios se conecta el navegador (GitHub Pages, Fandom, Wikimedia y Supabase ven la IP, como en cualquier web).
-- Datos de la miniatura: Hot Wheels Wiki (CC BY-SA). Texto y fichas: Wikipedia (CC BY-SA). Fotos: Wikimedia Commons, con autor y licencia de cada foto en pantalla y en créditos.
-- Hot Wheels es marca de Mattel; el sitio no usa su logo, no se indexa en buscadores y es un regalo personal sin fines comerciales.
+- Política en `sitio/privacidad.html` (Ley 1581 de 2012, Decreto 1377 de 2013). La autorización se pide con una casilla sin marcar, el servidor exige la versión vigente y la base anota la prueba sola al crear el usuario.
+- Encargados: Supabase, Cloudflare y el proveedor de correo, con sus contratos de tratamiento de datos.
+- Al borrar la cuenta queda solo una huella del correo con la fecha y la versión aceptada, 3 años. Limpieza diaria con pg_cron.
+- Contenido de terceros: Hot Wheels Wiki y Wikipedia (CC BY-SA), fotos libres de Commons con autor y licencia. Hot Wheels es marca de Mattel; sitio personal, sin fines comerciales y sin su logo.
