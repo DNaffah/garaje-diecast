@@ -1,6 +1,6 @@
 /* Panel de la izquierda y vitrinas. Cada cambio se guarda en el navegador y,
    si config.js tiene los datos de Supabase, también en la nube. */
-import { buscarModelos, leerModelo, imagenSegura } from './wiki.js';
+import { buscarModelos, leerModelo, imagenSegura, decodificar } from './wiki.js';
 import { cargarGaraje, guardarGaraje, cargarFondo, guardarFondo } from './almacen.js';
 import { confirmarDosVeces } from './confirmar.js';
 import { nubeDisponible, idGaraje, leerNube, guardarNube, hayPendiente, reintentar, ocultarCodigoDelEnlace } from './nube.js';
@@ -35,6 +35,22 @@ function limpiarLista(lista) {
   }));
 }
 
+function respaldar(lista) {
+  try { localStorage.setItem('garaje164.respaldo', JSON.stringify({ fecha: new Date().toISOString(), autos: lista })); } catch { /* sin espacio o modo privado: se sigue sin copia */ }
+}
+
+/* Para recuperar la copia desde la consola del navegador: restaurarRespaldo() */
+function restaurarRespaldo() {
+  try {
+    const copia = JSON.parse(localStorage.getItem('garaje164.respaldo') || 'null');
+    if (!copia?.autos?.length) return 'No hay copia guardada.';
+    garaje = limpiarLista(copia.autos);
+    guardar(); pintarColeccion(); pintarVitrinas({}); refrescarBotones();
+    return `Recuperados ${garaje.length} carros.`;
+  } catch { return 'La copia está dañada.'; }
+}
+window.restaurarRespaldo = restaurarRespaldo;
+
 function guardar() {
   guardarGaraje(garaje);
   if (!nubeDisponible()) return;
@@ -61,9 +77,13 @@ async function traerDeLaNube({ primeraVez = false } = {}) {
     if (primeraVez && !remoto.autos.length && garaje.length) { guardar(); return; }
     if (remoto.actualizado && remoto.actualizado === ultimaVersionNube) return;
     ultimaVersionNube = remoto.actualizado || '';
-    garaje = limpiarLista(remoto.autos);
+    const nueva = limpiarLista(remoto.autos);
+    /* Si la nube trae menos carros que los de aquí, se guarda una copia de lo que había.
+       Así un borrado por error (o alguien más con el enlace) no se lleva la lista para siempre. */
+    if (nueva.length < garaje.length) respaldar(garaje);
+    garaje = nueva;
     guardarGaraje(garaje);
-    if (remoto.fondo && remoto.fondo !== cargarFondo()) { guardarFondo(remoto.fondo); dispatchEvent(new CustomEvent('garaje:fondo')); }
+    if (/^(pista|taller|noche|desierto|estudio)$/.test(remoto.fondo || '') && remoto.fondo !== cargarFondo()) guardarFondo(remoto.fondo);
     pintarColeccion();
     pintarVitrinas({ encender: primeraVez });
     refrescarBotones();
@@ -301,7 +321,9 @@ export function agregarAuto(a) {
 }
 
 async function agregar(a, origenImg) {
+  if (a.clave.length >= 400) a = { ...a, clave: a.titulo };
   if (enGaraje(a.clave)) return;
+  if (garaje.length >= 300) { estadoNube('El garaje ya tiene 300 carros, el máximo. Saca alguno para meter otro.', 'aviso'); return; }
   garaje.push(a);
   guardar();
   pintarColeccion();
@@ -352,7 +374,7 @@ async function completarDatos(clave) {
     const m = await leerModelo(actual.titulo);
     const a = garaje.find((x) => x.clave === clave);
     if (!a) return;
-    const principal = m.imagen && !/sketch|drawing|render|concept|blueprint/i.test(decodeURIComponent(m.imagen)) ? m.imagen : '';
+    const principal = m.imagen && !/sketch|drawing|render|concept|blueprint/i.test(decodificar(m.imagen)) ? m.imagen : '';
     const foto = principal || m.versiones.at(-1)?.foto || m.versiones[0]?.foto || m.galeria[0]?.foto || m.imagen;
     if (foto) a.foto = foto;
     a.anio = (/\b(19|20)\d{2}\b/.exec(m.anios) || [''])[0];

@@ -1,5 +1,5 @@
-/* Garaje de coleccionista de noche: pared de concreto, vitrinas con tira LED,
-   tramos de pista naranja y placas de metal fundido (zamak). Tema oscuro a propósito. */
+/* Estilos de todo el sitio. Tema oscuro: las fotos de los carros resaltan más
+   sobre fondo oscuro y las vitrinas claras se ven como encendidas. */
 :root {
   --asfalto: #16171A;      /* fondo general */
   --concreto: #222429;     /* pared y paneles */
@@ -144,8 +144,8 @@ h1, h2, h3 { font-family: var(--f-titulo); font-weight: 800; line-height: 1; mar
   transition: background-color .2s, box-shadow .2s;
 }
 .vitrina.encendida .caja::before { background: var(--led); box-shadow: 0 0 14px 2px rgba(255,230,168,.55); }
-/* encendida: el fondo de acrílico blanco se ilumina desde la tira LED.
-   Las fotos de la wiki vienen sobre blanco y se funden con él (multiply). */
+/* encendida: la caja pasa a fondo claro. Las fotos de la wiki vienen sobre
+   blanco, y con multiply ese blanco desaparece contra el fondo. */
 .vitrina.encendida .caja {
   background:
     radial-gradient(120% 90% at 50% -10%, #fffdf6 0%, #f1eee6 45%, #d8d4ca 100%);
@@ -321,7 +321,7 @@ h1, h2, h3 { font-family: var(--f-titulo); font-weight: 800; line-height: 1; mar
 .version .v-color { font-size: 14px; font-weight: 600; }
 .version .v-serie { font-size: 13px; color: var(--tenue); line-height: 1.35; }
 
-/* placa de la base: metal fundido con texto grabado */
+/* placa con lo que dice la base del carro */
 .placa {
   position: relative; max-width: 640px; padding: 34px 28px; border-radius: 10px;
   background:
@@ -458,4 +458,35 @@ button.version.en-vitrina { border-color: var(--pista); }
 @media (max-width: 880px) {
   .sala-real-cuerpo { grid-template-columns: minmax(0, 1fr); }
   .ficha { grid-template-columns: minmax(0, 40%) minmax(0, 1fr); }
+}
+
+/* Carrusel de versiones con flechas */
+.carrusel { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.carrusel .versiones { scrollbar-width: thin; }
+.flecha {
+  width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--linea); background: var(--concreto);
+  color: var(--tinta); font-size: 26px; line-height: 1; display: grid; place-items: center; padding: 0 0 3px;
+  transition: border-color .16s var(--entrada), opacity .16s;
+}
+.flecha:hover:not(:disabled) { border-color: var(--pista); color: var(--pista); }
+.flecha:disabled { opacity: .3; cursor: default; }
+@media (max-width: 560px) {
+  .carrusel { grid-template-columns: minmax(0, 1fr); }
+  .flecha { position: absolute; top: 34%; z-index: 2; width: 38px; height: 38px; background: rgba(22,23,26,.85); }
+  .flecha-izq { left: 4px; } .flecha-der { right: 4px; }
+  .flecha:disabled { display: none; }
+}
+
+/* Celular de lado: foto y datos uno al lado del otro para que la foto no quede diminuta */
+@media (max-height: 520px) and (orientation: landscape) {
+  .escenario-grid { grid-template-columns: minmax(0, 1fr) 230px; grid-template-rows: auto minmax(0, 1fr); gap: 8px 14px; padding: 8px 16px; }
+  .escenario-info h2 { font-size: 22px; }
+  .museo-tipo { display: none; }
+  .marco { max-width: calc((100vh - 120px) * 1.5); }
+  .panel-datos { padding: 10px 12px; }
+  .datos-recorrido li:not(.actual) { display: none; }
+  .datos-recorrido li { opacity: 1; }
+  .desliza { display: none; }
+  .museo-barra { flex-direction: row; align-items: center; padding-block: 6px; }
+  .sacar-museo { position: static; }
 }

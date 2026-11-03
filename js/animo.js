@@ -1,6 +1,6 @@
 /* Mensajitos de ánimo. Salen al azar al abrir un carro, no siempre, para que no cansen. */
 const NOTAS = [
-  'Cada colección empezó con un solo auto. Todo lo demás también.',
+  'El primero que compraste seguro todavía lo tienes. Ese cuenta doble.',
   'Hoy la pista es tuya. Sin límite de vueltas.',
   'Los modelos buenos tardan en salir. Tú vas a tu ritmo, y vas bien.',
   'Que este año traiga más rectas que curvas. Y que las curvas valgan la pena.',
@@ -9,7 +9,7 @@ const NOTAS = [
   'Lo raro aparece cuando uno no deja de buscar. Sigue buscando.',
   'Si se raya la pintura, igual sigue rodando.',
   'Feliz vuelta al sol. Que la siguiente sea a fondo.',
-  'Tu garaje dice mucho de ti: paciencia, ojo y buen gusto.',
+  'Otro más para la vitrina. Ya casi no cabe nada, ¿no?',
   'Lo que se arma con calma dura más que lo que sale de afán.',
   'Un Super Treasure Hunt no se encuentra todos los días. Tú tampoco.',
 ];

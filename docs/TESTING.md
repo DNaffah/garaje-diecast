@@ -36,3 +36,17 @@ Se anota en cada entrega: fecha, qué pasó, qué falló y cómo se corrigió.
 - **A técnica:** `tests/e2e.cjs` pasa en 1440×900 y 390×844 (incluye sacar desde la vitrina y desde el museo, agregar una versión, elegir otra foto y persistencia).
 - **B usuario simulado:** recorridos en vivo de R34, '67 Camaro, 1997 Supra, '71 911 y Countach: todas las fotos del recorrido son del mismo modelo y generación.
 - **C seguridad:** Supabase con RLS y sin acceso directo (401), funciones con UUID; CSP `default-src 'none'`; sin `innerHTML`; revisión de secretos sin hallazgos; ver `SECURITY.md`.
+
+### 2026-11-02 · tercera entrega (pantallas, legal y revisión de seguridad aparte)
+- **A técnica:** `tests/e2e.cjs` pasa en 1440×900 y 390×844. Se agregó: tocar una versión la mete al garaje y vuelve; foto guardada mal codificada no cuelga el museo.
+- **Pantallas:** `tests/pantallas.cjs` revisa 10 tamaños, de 320×568 a 2560×1440, incluido celular horizontal (844×390): sin scroll horizontal, nada se sale por la derecha, la foto mide al menos 120 px de alto y el panel de datos se ve completo. Falló primero el celular horizontal (foto de 98 px) y la ficha en celular (la tira de versiones estiraba la grilla); los dos se arreglaron.
+- **Revisión legal aparte:** solo fotos libres de Commons con autor y licencia; crédito también para la foto de portada; enlaces a las licencias CC y aviso de adaptación de la ficha; aviso de marca de Mattel; texto de privacidad; archivos OFL de las fuentes.
+- **C seguridad, revisión aparte (otro agente, solo lectura):** sin hallazgos críticos, altos ni medios. Siete bajos y nueve informativos; arreglados:
+  - B1 `authenticated` podía ejecutar las funciones → `revoke` explícito en `supabase-endurecer.sql`.
+  - B2 el servidor aceptaba carros sin `titulo` → `coalesce` y largo 1–200.
+  - B3 un borrado desde la nube se llevaba la lista → copia local antes de reemplazar.
+  - B4 `&#99999999;` lanzaba RangeError → entidades fuera de Unicode se descartan.
+  - B5 regex de tiempo cuadrático con wikitexto armado → recorrido lineal y topes (2 MB en < 20 ms).
+  - B6 `decodeURIComponent` sin try → `decodificar`.
+  - I2, I3, I5, I6: fondo validado y evento muerto quitado; tope de 300 carros en el cliente; enlace de licencia solo a CC/Wikimedia; `blob:` fuera de la CSP.
+  - B7 (origen compartido en github.io) queda como riesgo aceptado en `SECURITY.md`.

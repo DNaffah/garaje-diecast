@@ -1,5 +1,5 @@
 /* El museo de cada carro: el recorrido con el scroll, la ficha, la miniatura y su base. */
-import { leerModelo, WIKI_BASE, imagenSegura } from './wiki.js';
+import { leerModelo, WIKI_BASE, imagenSegura, decodificar } from './wiki.js';
 import { leerAutoReal, recorridoDesde, llaveSerie } from './auto-real.js';
 import { autoDelGaraje, actualizarAuto, quitarAuto, agregarAuto } from './garaje.js';
 import { quizasMostrarNota } from './animo.js';
@@ -130,7 +130,7 @@ async function abrir(titulo) {
   }
   const guardada = imagenSegura(autoDelGaraje(titulo)?.fotoReal || '');
   if (real && guardada) {
-    const elegida = real.candidatas.find((c) => c.url === guardada) || { url: guardada, nombre: decodeURIComponent(guardada.split('/').pop().split('?')[0]), angulo: null, serie: llaveSerie(decodeURIComponent(guardada.split('/').pop())) };
+    const elegida = real.candidatas.find((c) => c.url === guardada) || { url: guardada, nombre: decodificar(guardada.split('/').pop().split('?')[0]), angulo: null, serie: llaveSerie(decodificar(guardada.split('/').pop())) };
     real.recorrido = recorridoDesde(elegida, real.candidatas);
   }
   pintarReal(modelo, real);
@@ -272,7 +272,7 @@ function pintarReal(modelo, r) {
     const dl = document.createElement('dl');
     dl.className = 'ficha';
     r.ficha.forEach((f) => dl.append(texto('dt', f.etiqueta), texto('dd', f.valor)));
-    der.append(dl, texto('p', 'Ficha tomada del artículo de Wikipedia de esta generación.', 'nota-idioma'));
+    der.append(dl, texto('p', 'Ficha adaptada y traducida del artículo de Wikipedia de esta generación (CC BY-SA 4.0).', 'nota-idioma'));
   }
   cuerpo.append(izq, der);
   el.real.replaceChildren(texto('p', 'El auto real', 'rotulo'), texto('h3', nombre), cuerpo);
@@ -290,7 +290,7 @@ function pintarMiniatura(modelo) {
     const ul = document.createElement('ul');
     ul.className = 'versiones';
     ul.setAttribute('aria-label', 'Versiones de la miniatura');
-    modelo.versiones.slice().reverse().forEach((v) => {
+    modelo.versiones.slice().reverse().slice(0, 10).forEach((v) => {
       const li = document.createElement('li');
       const b = document.createElement('button');
       b.type = 'button';
@@ -314,10 +314,39 @@ function pintarMiniatura(modelo) {
       li.append(b);
       ul.append(li);
     });
-    nodos.push(ul);
+    nodos.push(carrusel(ul, modelo.versiones.length));
   }
   nodos.push(enlace(WIKI_BASE + encodeURIComponent(modelo.titulo.replace(/ /g, '_')), 'Ver la ficha completa en la Hot Wheels Wiki'));
   el.mini.replaceChildren(...nodos);
+}
+
+/* La fila de versiones se mueve con flechas (y con el dedo en el celular). Se muestran las 10 más recientes. */
+function carrusel(ul, total) {
+  const caja = document.createElement('div');
+  caja.className = 'carrusel';
+  const flecha = (dir, etiqueta) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `flecha flecha-${dir}`;
+    b.setAttribute('aria-label', etiqueta);
+    b.textContent = dir === 'izq' ? '‹' : '›';
+    b.addEventListener('click', () => ul.scrollBy({ left: (dir === 'izq' ? -1 : 1) * ul.clientWidth * 0.8, behavior: 'smooth' }));
+    return b;
+  };
+  const izq = flecha('izq', 'Ver versiones anteriores');
+  const der = flecha('der', 'Ver más versiones');
+  const actualizar = () => {
+    izq.disabled = ul.scrollLeft <= 4;
+    der.disabled = ul.scrollLeft + ul.clientWidth >= ul.scrollWidth - 4;
+  };
+  ul.addEventListener('scroll', () => requestAnimationFrame(actualizar), { passive: true });
+  requestAnimationFrame(actualizar);
+  caja.append(izq, ul, der);
+  const nodos = [caja];
+  if (total > 10) nodos.push(texto('p', `Se muestran las 10 versiones más recientes de ${total}.`, 'nota-idioma'));
+  const f = document.createDocumentFragment();
+  f.append(...nodos);
+  return f;
 }
 
 function pintarBase(modelo) {
@@ -329,17 +358,36 @@ function pintarBase(modelo) {
     texto('p', 'Voltea la miniatura: este es el nombre que viene grabado en el chasis.', 'placa-pie'));
 }
 
+function parrafoConEnlaces(partes) {
+  const p = document.createElement('p');
+  partes.forEach((x) => p.append(typeof x === 'string' ? document.createTextNode(x) : enlace(x.href, x.texto)));
+  return p;
+}
+
 function pintarCreditos(modelo, r) {
-  const nodos = [texto('p', 'Datos e imágenes de la miniatura: Hot Wheels Wiki (Fandom), contenido bajo CC BY-SA. Hot Wheels es una marca de Mattel; este garaje es un regalo personal sin relación con la marca.')];
-  if (r?.articulo) nodos.push(texto('p', `Ficha técnica: Wikipedia, artículo “${r.articulo.titulo}” (CC BY-SA).${r.texto ? ` Texto: Wikipedia en ${r.texto.idioma === 'es' ? 'español' : 'inglés'}.` : ''}`));
+  const BY_SA_3 = 'https://creativecommons.org/licenses/by-sa/3.0/';
+  const BY_SA_4 = 'https://creativecommons.org/licenses/by-sa/4.0/';
+  const nodos = [
+    parrafoConEnlaces(['Datos y textos de la miniatura: ', { href: WIKI_BASE + encodeURIComponent(modelo.titulo.replace(/ /g, '_')), texto: 'Hot Wheels Wiki (Fandom)' },
+      ', colaboradores de la wiki, ', { href: BY_SA_3, texto: 'CC BY-SA 3.0' },
+      '. Las fotos de las miniaturas pertenecen a sus autores o a Mattel y se muestran enlazadas desde la wiki, sin copiarlas. Hot Wheels es una marca registrada de Mattel, Inc.; este garaje es un regalo personal, no comercial, sin relación con Mattel ni respaldo de su parte.']),
+  ];
+  if (r?.articulo) {
+    nodos.push(parrafoConEnlaces(['Ficha técnica: adaptada y traducida al español del artículo de Wikipedia ', { href: r.articulo.url, texto: `“${r.articulo.titulo}”` },
+      ', colaboradores de Wikipedia, ', { href: BY_SA_4, texto: 'CC BY-SA 4.0' }, '. La ficha adaptada se comparte bajo la misma licencia.']));
+  }
+  if (r?.texto) {
+    nodos.push(parrafoConEnlaces([`Texto del auto real: Wikipedia en ${r.texto.idioma === 'es' ? 'español' : 'inglés'}, `, { href: r.texto.url, texto: `“${r.texto.titulo}”` }, ', ', { href: BY_SA_4, texto: 'CC BY-SA 4.0' }, '.']));
+  }
   if (r?.recorrido?.length) {
     const ul = document.createElement('ul');
     r.recorrido.forEach((f) => {
       const li = document.createElement('li');
-      li.append(enlace(f.pagina, f.nombre), document.createTextNode(` · ${[f.autor, f.licencia].filter(Boolean).join(', ') || 'Wikimedia Commons'}`));
+      li.append(enlace(f.pagina, f.nombre), document.createTextNode(` · ${f.autor} · `));
+      li.append(f.licenciaUrl ? enlace(f.licenciaUrl, f.licencia) : document.createTextNode(f.licencia));
       ul.append(li);
     });
-    nodos.push(texto('p', 'Fotos del auto real:'), ul);
+    nodos.push(texto('p', 'Fotos del auto real (Wikimedia Commons, sin modificaciones):'), ul);
   }
   el.creditos.replaceChildren(...nodos);
 }

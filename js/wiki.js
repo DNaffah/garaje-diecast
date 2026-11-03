@@ -20,6 +20,15 @@ export async function pedirJSON(base, params, { signal } = {}) {
   return promesa;
 }
 
+/* Un nombre de archivo mal codificado (un % suelto) no debe tumbar el museo. */
+export function decodificar(s = '') {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
+/* Las páginas de la wiki las edita cualquiera. Con un tope de largo, una página
+   inflada a propósito no congela la pestaña limpiando el texto. */
+export const TOPE_WIKITEXTO = 150000;
+
 export function imagenSegura(url) {
   try {
     const u = new URL(url);
@@ -44,21 +53,52 @@ export async function buscarModelos(texto, { signal } = {}) {
     .map((p) => ({ titulo: p.title, mini: imagenSegura(p.thumbnail?.source ?? '') }));
 }
 
+/* Quita <ref>…</ref>, <ref …/> y comentarios <!-- --> recorriendo el texto una sola vez.
+   Con regex, un texto lleno de "<ref " sin cerrar tardaba segundos en limpiarse. */
+export function sinRefs(t = '') {
+  const s = String(t);
+  const bajo = s.toLowerCase();
+  let fuera = '';
+  let i = 0;
+  let quedanCierres = true;
+  let ref = bajo.indexOf('<ref');
+  let com = s.indexOf('<!--');
+  while (i < s.length) {
+    if (ref !== -1 && ref < i) ref = bajo.indexOf('<ref', i);
+    if (com !== -1 && com < i) com = s.indexOf('<!--', i);
+    const prox = ref === -1 ? com : com === -1 ? ref : Math.min(ref, com);
+    if (prox === -1) { fuera += s.slice(i); break; }
+    fuera += s.slice(i, prox);
+    if (prox === com) {
+      const fin = s.indexOf('-->', prox + 4);
+      i = fin === -1 ? s.length : fin + 3;
+      continue;
+    }
+    const cierreTag = s.indexOf('>', prox);
+    if (cierreTag === -1) break;
+    if (s[cierreTag - 1] === '/') { i = cierreTag + 1; continue; }
+    const fin = quedanCierres ? bajo.indexOf('</ref>', cierreTag) : -1;
+    if (fin === -1) quedanCierres = false;
+    i = fin === -1 ? cierreTag + 1 : fin + 6;
+  }
+  return fuera;
+}
+
 export function limpiarWikitexto(t = '') {
-  let s = t
-    .replace(/<ref[^>]*\/>/gi, '')
-    .replace(/<ref[\s\S]*?<\/ref>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '');
+  let s = sinRefs(String(t).slice(0, TOPE_WIKITEXTO));
   for (let i = 0; i < 3; i++) s = s.replace(/\{\{[^{}]*\}\}/g, '');
   s = s
-    .replace(/\[\[(?:File|Image|Archivo):[^\]]*\]\]/gi, '')
-    .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1')
-    .replace(/\[\[([^\]]*)\]\]/g, '$1')
-    .replace(/\[https?:\/\/\S+\s([^\]]+)\]/g, '$1')
+    .replace(/\[\[(?:File|Image|Archivo):[^\][]{0,500}\]\]/gi, '')
+    .replace(/\[\[[^\][|]{0,300}\|([^\][]{0,300})\]\]/g, '$1')
+    .replace(/\[\[([^\][]{0,300})\]\]/g, '$1')
+    .replace(/\[https?:\/\/[^\s\][]{1,500}\s([^\][]{1,300})\]/g, '$1')
     .replace(/'{2,}/g, '')
     .replace(/<br\s*\/?>/gi, ' / ')
-    .replace(/<[^>]+>/g, '')
+    .replace(/<[^<>]{1,300}>/g, '')
     .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, n) => (n === '8209' || n === '8208' ? '-' : Number(n) <= 0x10FFFF ? String.fromCodePoint(Number(n)) : ''))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => (parseInt(n, 16) <= 0x10FFFF ? String.fromCodePoint(parseInt(n, 16)) : ''))
+    .replace(/&ndash;/g, '–').replace(/&mdash;/g, '—').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/[ \t]+/g, ' ');
   return s.trim();
 }
@@ -73,7 +113,7 @@ function seccion(wikitexto, nombre) {
 }
 
 function campoPlantilla(wikitexto, campo) {
-  const m = new RegExp(`\\|\\s*${campo}\\s*=\\s*([^\\n|]*(?:\\[\\[[^\\]]*\\]\\][^\\n|]*)*)`, 'i').exec(wikitexto);
+  const m = new RegExp(`\\|\\s*${campo}\\s*=\\s*((?:\\[\\[[^\\]]*\\]\\]|\\{\\{[^}]*\\}\\}|[^\\n|])*)`, 'i').exec(wikitexto);
   return m ? limpiarWikitexto(m[1]) : '';
 }
 
@@ -152,7 +192,7 @@ export async function leerModelo(titulo) {
     pedirJSON(API, { action: 'parse', page: titulo, prop: 'wikitext', redirects: '1' }),
     pedirJSON(API, { action: 'query', titles: titulo, prop: 'categories', cllimit: 'max', clshow: '!hidden', redirects: '1' }),
   ]);
-  const wikitexto = parse?.parse?.wikitext ?? '';
+  const wikitexto = (parse?.parse?.wikitext ?? '').slice(0, TOPE_WIKITEXTO);
   if (!wikitexto) throw new Error('La wiki no devolvió esa página.');
   const categorias = (cats?.query?.pages?.[0]?.categories ?? []).map((c) => c.title.replace(/^Category:/, ''));
 
@@ -173,7 +213,7 @@ export async function leerModelo(titulo) {
   return {
     titulo: parse.parse.title || titulo,
     serieDebut: campoPlantilla(wikitexto, 'series'),
-    anios: campoPlantilla(wikitexto, 'years'),
+    anios: campoPlantilla(wikitexto, 'years').replace(/\s*-\s*present\b/i, '–hoy').replace(/\bpresent\b/i, 'hoy'),
     disenador: campoPlantilla(wikitexto, 'designer'),
     numero: campoPlantilla(wikitexto, 'number'),
     imagen: urls.get(imagenPrincipal) || '',

@@ -1,7 +1,7 @@
 /* Aquí se busca el carro de verdad detrás de cada miniatura.
    Lo delicado es no mezclar generaciones: un '67 Camaro no es el de 2019. Por eso se cruzan
    los años de producción del artículo de Wikipedia con el año o el código del modelo. */
-import { pedirJSON, imagenSegura } from './wiki.js';
+import { pedirJSON, imagenSegura, decodificar, sinRefs } from './wiki.js';
 
 const EN = 'https://en.wikipedia.org/w/api.php';
 const COMMONS = 'https://commons.wikimedia.org/w/api.php';
@@ -72,20 +72,20 @@ function soloDelAnio(valor, anio) {
   return elegidas.length ? [...new Set(elegidas)].join(' · ') : partes[0];
 }
 
-function sinPlantillas(v) {
-  let s = v.replace(/<ref[^>]*\/>/gi, '').replace(/<ref[\s\S]*?<\/ref>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
+export function sinPlantillas(v) {
+  let s = sinRefs(String(v).slice(0, 20000));
   for (let i = 0; i < 4; i++) {
     s = s
-      .replace(/\{\{\s*(?:convert|cvt)\s*\|\s*([\d.,]+)\s*\|\s*([^|}]+)[^{}]*\}\}/gi, (_, n, u) => aMetrico(n, u))
-      .replace(/\{\{\s*(?:ubl|unbulleted list|plainlist|flatlist|hlist|bulleted list|nowrap|small|nobr)\s*\|([^{}]*)\}\}/gi, (_, x) => x.split('|').map((y) => y.trim()).filter((y) => y && !y.includes('=')).join(' · '))
-      .replace(/\{\{\s*(?:start date|start year|end date)\s*\|\s*(\d{4})[^{}]*\}\}/gi, '$1')
-      .replace(/\{\{[^{}]*\}\}/g, '');
+      .replace(/\{\{\s*(?:convert|cvt)\s*\|\s*([\d.,]{1,20})\s*\|\s*([^|{}]{1,40})[^{}]{0,300}\}\}/gi, (_, n, u) => aMetrico(n, u))
+      .replace(/\{\{\s*(?:ubl|unbulleted list|plainlist|flatlist|hlist|bulleted list|nowrap|small|nobr)\s*\|([^{}]{0,2000})\}\}/gi, (_, x) => x.split('|').map((y) => y.trim()).filter((y) => y && !y.includes('=')).join(' · '))
+      .replace(/\{\{\s*(?:start date|start year|end date)\s*\|\s*(\d{4})[^{}]{0,300}\}\}/gi, '$1')
+      .replace(/\{\{[^{}]{0,2000}\}\}/g, '');
   }
   return s
-    .replace(/\[\[(?:File|Image):[^\]]*\]\]/gi, '')
-    .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1').replace(/\[\[([^\]#]*)(#[^\]]*)?\]\]/g, '$1')
-    .replace(/\[https?:\/\/\S+\s([^\]]+)\]/g, '$1')
-    .replace(/'{2,}/g, '').replace(/<br\s*\/?>/gi, ' · ').replace(/<[^>]+>/g, '')
+    .replace(/\[\[(?:File|Image):[^\][]{0,500}\]\]/gi, '')
+    .replace(/\[\[[^\][|]{0,300}\|([^\][]{0,300})\]\]/g, '$1').replace(/\[\[([^\][#]{0,300})(#[^\][]{0,300})?\]\]/g, '$1')
+    .replace(/\[https?:\/\/[^\s\][]{1,500}\s([^\][]{1,300})\]/g, '$1')
+    .replace(/'{2,}/g, '').replace(/<br\s*\/?>/gi, ' · ').replace(/<[^<>]{1,300}>/g, '')
     .replace(/&nbsp;|&#160;/g, ' ').replace(/&ndash;/g, '–').replace(/&mdash;/g, '—')
     .replace(/^\s*\*\s*/gm, ' · ').replace(/\s*·\s*(·\s*)+/g, ' · ')
     .replace(/\s+/g, ' ').replace(/^\s*·\s*|\s*·\s*$/g, '').trim();
@@ -225,7 +225,7 @@ async function articuloDeGeneracion(datos) {
     const texto = pag.revisions?.[0]?.slots?.main?.content || '';
     const campos = camposInfobox(bloqueInfobox(texto));
     const t = pag.title.toLowerCase();
-    const portada = decodeURIComponent((pag.original?.source || '').split('/').pop() || '').replace(/_/g, ' ');
+    const portada = decodificar((pag.original?.source || '').split('/').pop() || '').replace(/_/g, ' ');
     const presentes = modeloTokens.filter((k) => t.includes(k)).length;
     const reCodigo = codigo ? new RegExp(`\\b(${escaparRe(codigo)}|${escaparRe(corto || codigo)})\\b`, 'i') : null;
     const codigoEnTitulo = Boolean(reCodigo?.test(pag.title));
@@ -246,7 +246,7 @@ async function articuloDeGeneracion(datos) {
   return mejor;
 }
 
-const IMAGEINFO = { prop: 'imageinfo', iiprop: 'url|size|extmetadata', iiurlwidth: '1600', iiextmetadatafilter: 'Artist|LicenseShortName' };
+const IMAGEINFO = { prop: 'imageinfo', iiprop: 'url|size|extmetadata', iiurlwidth: '1600', iiextmetadatafilter: 'Artist|LicenseShortName|LicenseUrl|NonFree' };
 const DESCARTAR = /\b(interior|engine|motor(?! ?show)|dashboard|cockpit|badge|logo|emblem|wheels?|rims?|seats?|steering|trunk|details?|hot ?wheels|matchbox|diecast|die-cast|scale|lego|toys?|tamiya|model kit|brochure|advert\w*|crash\w*|wreck\w*|license plate|lamps?|grille|hood ornament|chassis|frame|tail ?lights?|headlights?|mirrors?|door handle|miniature|replica|modell?|dett|vin|police|polizei|race|racing|rally|gt500|jgtc|super gt|le mans|livery|drift|nascar|xanavi|calsonic|crowd|people|parking|street|traffic|for sale|rusty|abandoned|barn|restoration|project|parts?|cutaway|sketch|drawing|diagram|map)\b/i;
 /* Motores, carros modificados o tuneados: no sirven para mostrar el carro tal como salió de fábrica. */
 const NO_DE_FABRICA = /dett|\brb\d{2}|\b\d[a-z]{1,2}-?g?te\b|engine bay|\b(tuned|modified|custom|widebody|wide body|liberty walk|rocket bunny|stance[d]?|drag|lowrider|rat rod|hot rod|replica)\b/i;
@@ -270,9 +270,21 @@ export function llaveSerie(nombre) {
     .replace(/\(cropped\)|\(\d{1,2}\)|\b\d{1,3}\b|\bimg\b/g, ' ').replace(/[^a-z0-9äöüéèàñ]+/g, ' ').trim();
 }
 
+/* El enlace de la licencia viene de Commons, que cualquiera edita: solo se acepta
+   si apunta a Creative Commons o a Wikimedia. */
+function enlaceDeLicencia(valor) {
+  try {
+    const u = new URL(String(valor || ''));
+    const host = u.hostname;
+    const confiable = host === 'creativecommons.org' || host.endsWith('.creativecommons.org')
+      || host.endsWith('.wikimedia.org') || host.endsWith('.wikipedia.org');
+    return u.protocol === 'https:' && confiable ? u.href : '';
+  } catch { return ''; }
+}
+
 function textoPlano(html = '') {
   const doc = new DOMParser().parseFromString(`<p>${html}</p>`, 'text/html');
-  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
 function candidataDe(p) {
@@ -284,10 +296,16 @@ function candidataDe(p) {
   if (info.width < 1000 || proporcion < 1.25 || proporcion > 2.4) return null;
   const url = imagenSegura(info.thumburl || info.url);
   if (!url) return null;
+  /* Solo fotos libres de Commons: las "non-free" de Wikipedia en inglés dependen del uso legítimo
+     de EE. UU., que en Colombia no existe igual. Y sin licencia conocida, tampoco. */
+  if (!/\/wikipedia\/commons\//.test(new URL(info.url || url).pathname)) return null;
   const meta = info.extmetadata || {};
+  const licencia = textoPlano(meta.LicenseShortName?.value);
+  if (meta.NonFree?.value || !licencia || /fair use|non-free/i.test(licencia)) return null;
+  const licenciaUrl = enlaceDeLicencia(meta.LicenseUrl?.value);
   return {
     url, nombre, angulo: anguloDe(nombre), serie: llaveSerie(nombre), deArticulo: Boolean(p.deArticulo),
-    autor: textoPlano(meta.Artist?.value), licencia: textoPlano(meta.LicenseShortName?.value),
+    autor: textoPlano(meta.Artist?.value) || 'Autor sin nombre en Commons', licencia, licenciaUrl,
     pagina: info.descriptionurl || `https://commons.wikimedia.org/wiki/${encodeURIComponent(p.title)}`,
   };
 }
@@ -325,12 +343,22 @@ async function fotosCandidatas(datos, articulo) {
 function portadaValida(articulo, datos) {
   const src = articulo?.portada?.source;
   if (!src || !imagenSegura(src)) return null;
-  const nombre = decodeURIComponent(src.split('/').pop().split('?')[0]).replace(/_/g, ' ');
+  const nombre = decodificar(src.split('/').pop().split('?')[0]).replace(/_/g, ' ');
   if (DESCARTAR.test(nombre) || NO_DE_FABRICA.test(nombre)) return null;
   const tieneAnioOCodigo = /\b(19|20)\d{2}\b/.test(nombre) || (datos.codigo && /[A-Z]\d{2}/.test(nombre));
   const generacionAngosta = articulo.rango && articulo.rango[1] - articulo.rango[0] <= 12;
   if (!coincide(nombre, datos) && (tieneAnioOCodigo || !generacionAngosta)) return null;
-  return { url: imagenSegura(src), nombre, angulo: anguloDe(nombre), serie: llaveSerie(nombre), autor: '', licencia: '', pagina: `https://en.wikipedia.org/wiki/${encodeURIComponent(articulo.titulo.replace(/ /g, '_'))}` };
+  return nombre;
+}
+
+async function portadaConCredito(articulo, datos) {
+  const nombre = portadaValida(articulo, datos);
+  if (!nombre) return null;
+  const r = await pedirJSON(EN, { action: 'query', titles: `File:${nombre}`, ...IMAGEINFO });
+  const pag = r?.query?.pages?.[0];
+  if (!pag) return null;
+  const c = candidataDe({ ...pag, deArticulo: true });
+  return c ? { ...c, esPortada: true } : null;
 }
 
 export function recorridoDesde(principal, candidatas) {
@@ -402,7 +430,7 @@ export async function leerAutoReal(modelo) {
     fotosCandidatas(datos, articulo).catch(() => []),
     articulo ? articuloEspanol(articulo.titulo).catch(() => null) : null,
   ]);
-  let portada = portadaValida(articulo, datos);
+  let portada = await portadaConCredito(articulo, datos).catch(() => null);
   if (portada && datos.anio && !portada.nombre.includes(datos.anio)) {
     const delAnio = candidatas.filter((c) => c.nombre.includes(datos.anio));
     if (delAnio.length) portada = null;

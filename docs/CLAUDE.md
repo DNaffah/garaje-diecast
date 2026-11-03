@@ -21,6 +21,8 @@ js/confirmar.js          confirmación de dos toques
 js/almacen.js            localStorage con try/catch
 docs/supabase-*.sql      tabla, funciones y validaciones
 tests/e2e.cjs            Playwright con APIs simuladas
+tests/simulador.cjs      respuestas falsas de Fandom, Wikipedia y Commons
+tests/pantallas.cjs      10 tamaños de pantalla, de 320 px a 2560 px
 ```
 
 ## Reglas del proyecto
@@ -31,4 +33,4 @@ tests/e2e.cjs            Playwright con APIs simuladas
 - Comentarios cortos con `/* */`, en español, explicando el porqué.
 
 ## Definición de terminado
-Pruebas de `tests/e2e.cjs` pasan, capturas revisadas, consola sin errores, prueba en vivo contra las APIs reales y Supabase.
+Pruebas de `tests/e2e.cjs` y `tests/pantallas.cjs` pasan, capturas revisadas, consola sin errores, prueba en vivo contra las APIs reales y Supabase.
