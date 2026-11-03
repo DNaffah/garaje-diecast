@@ -249,7 +249,18 @@ function avisoGaraje(texto) {
   setTimeout(() => { p.hidden = true; }, 7000);
 }
 
+/* Mientras no haya correo propio, Supabase manda un enlace de confirmación (no un código) que
+   vuelve aquí con la sesión en el #. Esa sesión no se usa: la maneja el servidor. Se quita de
+   la barra de direcciones y se avisa que ya puede entrar. */
+function volvioDelEnlaceDeCorreo() {
+  if (!/(^|[#&])(access_token|error_description)=/.test(location.hash)) return '';
+  const confirmado = /access_token=/.test(location.hash);
+  history.replaceState(null, '', location.pathname + location.search);
+  return confirmado ? 'Tu correo quedó confirmado. Entra con tu contraseña.' : 'Ese enlace ya venció. Entra con tu contraseña o crea la cuenta otra vez.';
+}
+
 export async function iniciarAcceso(alEntrar) {
+  const avisoEnlace = volvioDelEnlaceDeCorreo();
   limpiarRestos();
   guardarCodigoRegalo();
   conectarFormularios(alEntrar);
@@ -267,7 +278,7 @@ export async function iniciarAcceso(alEntrar) {
     return;
   }
   if (yo.conectado) { modoDosPasos = 'entrar'; irA('dospasos'); return; }
-  irA('entrar');
+  irA('entrar', { aviso: avisoEnlace });
 }
 
 /* ---------- diálogo "Tu cuenta" ---------- */
