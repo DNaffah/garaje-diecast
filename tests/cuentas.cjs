@@ -212,7 +212,33 @@ async function escribir(page, selector, texto) { await page.fill(selector, ''); 
   const yaNo = await fetch(BASE + 'api/entrar', { method: 'POST', headers: { Origin: BASE.slice(0, -1), 'X-Garaje': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ correo: correoB, clave }) });
   revisar(yaNo.status === 401 || yaNo.status === 429, `la cuenta borrada todavía entra (${yaNo.status})`);
 
-  for (const [n, x] of [['A', A], ['B', B], ['C', C], ['D', D], ['E', E]]) {
+  /* 13. Sin correo configurado: con "Confirm email" apagado un rato, el amigo crea su cuenta
+     con el link del regalo, no espera código, entra con su contraseña y se queda el garaje. */
+  await fetch('http://127.0.0.1:54321/__ajustes', { method: 'POST', body: JSON.stringify({ autoconfirmar: true }) });
+  const regalo2 = await crearRegalo([{ clave: 'Twin Mill', titulo: 'Twin Mill', foto: '', anio: '', fotoReal: '', color: '', serie: '' }]);
+  const G = await contexto(b, 390, 844);
+  /* Otra IP: desde la de la prueba ya van los 5 registros por hora que permite el límite. */
+  await G.page.setExtraHTTPHeaders({ 'CF-Connecting-IP': '203.0.113.7' });
+  const correoG = correoUnico('cumpleanero');
+  await G.page.goto(`${BASE}?g=${regalo2}`, { waitUntil: 'load' });
+  await G.page.waitForSelector('#placa:not([hidden])');
+  await G.page.click('[data-ir="crear"]');
+  await escribir(G.page, '#crear-correo', correoG);
+  await escribir(G.page, '#crear-clave', clave);
+  await G.page.check('[name=acepto]');
+  await G.page.click('[data-paso="crear"] button[type=submit]');
+  await G.page.waitForSelector('[data-paso="verificar"]:not([hidden])');
+  await G.page.click('[data-paso="verificar"] [data-ir="entrar"]');
+  await escribir(G.page, '#entrar-correo', correoG);
+  await escribir(G.page, '#entrar-clave', clave);
+  await G.page.click('[data-paso="entrar"] button[type=submit]');
+  await G.page.waitForSelector('#acceso', { state: 'hidden', timeout: 8000 }).catch(() => fallos.push('sin correo, el amigo no pudo entrar'));
+  await G.page.waitForTimeout(900);
+  revisar((await G.page.locator('.vitrina').count()) === 1, 'sin correo, el amigo no recibió el garaje del regalo');
+  await fetch('http://127.0.0.1:54321/__ajustes', { method: 'POST', body: JSON.stringify({ autoconfirmar: false }) });
+  await G.page.screenshot({ path: path.join(OUT, 'c7-sin-correo.png') });
+
+  for (const [n, x] of [['A', A], ['B', B], ['C', C], ['D', D], ['E', E], ['G', G]]) {
     if (x.page.errores.length) fallos.push(`errores de consola en ${n}: ${x.page.errores.join(' | ')}`);
     revisar(!(await x.page.evaluate(() => document.documentElement.scrollWidth > innerWidth)), `scroll horizontal en ${n}`);
   }

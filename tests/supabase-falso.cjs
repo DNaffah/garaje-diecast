@@ -16,6 +16,7 @@ const garajes = [];              // { id, dueno, autos, fondo, actualizado }
 const intentos = [];
 const autorizaciones = [];
 const retos = new Map();
+const ajustes = { autoconfirmar: false }; /* como apagar "Confirm email" en Supabase */
 
 const b64u = (b) => Buffer.from(b).toString('base64url');
 function jwt(id, aal) {
@@ -78,6 +79,7 @@ function servidor() {
       garajes.push(g);
       return enviar(200, { id: g.id });
     }
+    if (url.pathname === '/__ajustes') { Object.assign(ajustes, d); return enviar(200, ajustes); }
     if (url.pathname === '/__estado') return enviar(200, { autorizaciones, intentos: intentos.length, usuarios: usuarios.size });
 
     const apikey = req.headers.apikey;
@@ -95,9 +97,10 @@ function servidor() {
       /* Como GoTrue: si el correo ya existe sin confirmar, NO cambia la contraseña; solo manda
          otro código. */
       if (existente) { correos.set(d.email, (existente.codigo = codigo6())); return enviar(200, { id: existente.id, email: d.email }); }
-      const nuevo = { id: crypto.randomUUID(), email: d.email, factores: [], clave: d.password, confirmado: false };
+      const nuevo = { id: crypto.randomUUID(), email: d.email, factores: [], clave: d.password, confirmado: ajustes.autoconfirmar };
       usuarios.set(d.email, nuevo);
       if (/^\d{4}-\d{2}-\d{2}$/.test(d.data?.politica_version || '')) autorizaciones.push({ usuario: nuevo.id, version: d.data.politica_version });
+      if (ajustes.autoconfirmar) return enviar(200, nuevaSesion(nuevo));
       correos.set(d.email, (nuevo.codigo = codigo6()));
       return enviar(200, { id: nuevo.id, email: d.email });
     }
