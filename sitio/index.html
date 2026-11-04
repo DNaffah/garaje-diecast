@@ -66,7 +66,7 @@
     </form>
 
     <form class="paso" data-paso="verificar" data-titulo="Revisa tu correo" novalidate hidden>
-      <p class="acceso-texto">Te enviamos un código de 6 números a <strong data-correo></strong>. Si no aparece, mira en spam.</p>
+      <p class="acceso-texto">Te enviamos un código de 6 números a <strong data-correo></strong>. Si no aparece, mira en spam. Si ese correo ya tenía la cuenta confirmada no llega otro código: entra con tu contraseña o recupérala.</p>
       <label for="verificar-codigo">Código</label>
       <input id="verificar-codigo" class="codigo" name="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false" required>
       <div class="solo-sin-clave paso-campo">
@@ -78,6 +78,7 @@
       <div class="acceso-enlaces">
         <button type="button" class="enlace" id="reenviar-registro">Enviar otro código</button>
         <button type="button" class="enlace" data-ir="entrar">Ya tengo la cuenta, entrar</button>
+        <button type="button" class="enlace" data-ir="olvide">Olvidé mi contraseña</button>
       </div>
     </form>
 
