@@ -65,6 +65,17 @@ todo esté bien se une a `main`.
   redirección a la dirección nueva (o desactivar GitHub Pages).
 - Guardar copia de los contratos de tratamiento de datos (DPA) de Supabase, Cloudflare y Google.
 
+## Actualizaciones
+### 2026-11-08 · límites, respaldo y limpieza
+1. **Supabase → SQL Editor:** pegar otra vez todo `docs/supabase-cuentas.sql` y **Run**. Se puede repetir sin
+   perder datos. Agrega `limpieza_diaria()`, cambia la tarea de pg_cron y cierra los permisos por defecto.
+2. **Supabase → Project Settings → API Keys:** borrar la Publishable key vieja ("default") y desactivar las
+   legacy (anon y service_role). Quedan solo las que se llaman "cloudflare".
+3. **Solo si algún día se usa un dominio propio** (las reglas del WAF van por dominio y `*.pages.dev` es de
+   Cloudflare): Security → WAF → Rate limiting rules → Create rule (el plan gratis trae una). Si la ruta contiene
+   `/api/`, contar por IP, 120 pedidos cada 10 segundos, Block 10 segundos. Mientras tanto, los límites del
+   servidor (`TOPES_POR_IP` y `permitir`) hacen ese trabajo.
+
 ## Probar en local
 ```bash
 npm install --prefix .herramientas wrangler@3.114.17
@@ -73,6 +84,8 @@ tests/servidor-local.sh                    # el sitio en http://127.0.0.1:8788
 tests/correr.sh tests/cuentas.cjs capturas
 tests/correr.sh tests/e2e.cjs capturas
 tests/correr.sh tests/pantallas.cjs capturas
+tests/correr.sh tests/respaldo.cjs capturas  # la Hot Wheels Wiki caída: búsqueda y museo con Wikipedia
+tests/correr.sh tests/limites.cjs            # límites por IP, por IP + correo y por correo
 tests/sql/probar.sh                        # el SQL en un PostgreSQL desechable
 ```
 Los códigos de la simulación se leen en `http://127.0.0.1:54321/__correo?email=...`.

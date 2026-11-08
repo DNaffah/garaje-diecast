@@ -114,6 +114,11 @@ async function simular(route) {
     if (p.prop === 'imageinfo') return json({ query: { pages: p.titles.split('|').map((t) => ({ title: t, imageinfo: [{ thumburl: 'https://static.wikia.nocookie.net/hotwheels/images/' + encodeURIComponent(t) }] })) } });
   }
   if (/wikipedia\.org$/.test(url.hostname)) {
+    /* Búsqueda de respaldo cuando la Hot Wheels Wiki no responde (solo artículos con ficha de auto). */
+    if (p.generator === 'search' && /hastemplate:"Infobox automobile"/.test(p.gsrsearch || '')) return json({ query: { pages: [
+      { title: 'Nissan Skyline GT-R', index: 1, thumbnail: { source: 'https://upload.wikimedia.org/wikipedia/commons/thumb/x/r34.jpg' } },
+      { title: 'Nissan Skyline', index: 2 },
+    ] } });
     if (url.pathname.includes('/page/summary/')) return json({ title: 'Nissan Skyline GT-R', extract: 'El Nissan Skyline GT-R es un deportivo japonés de Nissan.', type: 'standard' });
     if (p.list === 'search') return json({ query: { search: [{ title: 'Nissan Skyline GT-R' }, { title: 'Nissan RB engine' }, { title: 'Nissan Skyline' }] } });
     if (p.prop === 'imageinfo' && p.titles) {

@@ -32,3 +32,8 @@ alter table public.garajes enable row level security;
 revoke all on public.garajes from anon, authenticated;
 insert into public.garajes (id, autos) values ('11111111-1111-4111-8111-111111111111',
   '[{"titulo":"Twin Mill","foto":"","anio":"1969"},{"titulo":"Bone Shaker","foto":""}]');
+
+-- Igual que Supabase: lo que se crea en public nace con permisos para anon y authenticated.
+alter default privileges for role postgres in schema public grant all on tables to anon, authenticated;
+alter default privileges for role postgres in schema public grant all on sequences to anon, authenticated;
+alter default privileges for role postgres in schema public grant all on functions to anon, authenticated;

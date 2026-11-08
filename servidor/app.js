@@ -200,6 +200,14 @@ function despues(ctx, promesa) {
   if (ctx?.waitUntil) ctx.waitUntil(promesa.catch(() => {}));
   else return promesa.catch(() => {});
 }
+/* Códigos y correos: el tope bajo cuenta por IP + correo, así quien conoce un correo ajeno solo
+   se bloquea a sí mismo. El tope global por correo es más alto y sigue frenando a quien reparte
+   el ataque entre muchas IPs (adivinar un código de 6 números o llenar un buzón). La IP va
+   primero: una IP bloqueada ya no suma en los demás contadores. */
+function reglasDeCorreo(request, correo, [porIp, porIpYCorreo, porCorreo], segundos) {
+  const ip = ipDe(request);
+  return [[ip, porIp, segundos], [`${ip}|${correo}`, porIpYCorreo, segundos], [correo, porCorreo, segundos]];
+}
 const demasiados = () => error('Demasiados intentos. Espera unos minutos y vuelve a probar.', 429);
 
 /* ---------- acciones ---------- */
@@ -226,7 +234,8 @@ async function verificar(request, cfg) {
   const correo = correoValido(d.correo);
   const codigo = codigoValido(d.codigo);
   if (typeof d.clave !== 'string' || !d.clave || d.clave.length > 200) throw new ErrorEntrada('Vuelve a escribir tu contraseña.');
-  if (!(await permitir(cfg, 'verificar', [[correo, 8, 900], [ipDe(request), 30, 900]]))) return demasiados();
+  claveValida(d.clave);
+  if (!(await permitir(cfg, 'verificar', reglasDeCorreo(request, correo, [30, 8, 30], 900)))) return demasiados();
   const r = await supa(cfg, '/auth/v1/verify', { cuerpo: { type: 'email', email: correo, token: codigo }, ip: ipReal(request) });
   if (!r.ok || !r.datos?.access_token) return error('El código no es correcto o ya venció.');
   const cambio = await cambiarClave(cfg, r.datos.access_token, d.clave);
@@ -240,7 +249,7 @@ async function verificar(request, cfg) {
 async function reenviar(request, cfg, s, ctx) {
   const d = await cuerpoJSON(request);
   const correo = correoValido(d.correo);
-  if (!(await permitir(cfg, 'reenviar', [[correo, 3, 3600], [ipDe(request), 10, 3600]]))) return demasiados();
+  if (!(await permitir(cfg, 'reenviar', reglasDeCorreo(request, correo, [10, 3, 6], 3600)))) return demasiados();
   await despues(ctx, supa(cfg, '/auth/v1/resend', { cuerpo: { type: 'signup', email: correo }, ip: ipReal(request) }));
   return responder({ ok: true });
 }
@@ -318,7 +327,7 @@ async function salir(request, cfg, s) {
 async function olvide(request, cfg, s, ctx) {
   const d = await cuerpoJSON(request);
   const correo = correoValido(d.correo);
-  if (!(await permitir(cfg, 'olvide', [[correo, 5, 3600], [ipDe(request), 10, 3600]]))) return demasiados();
+  if (!(await permitir(cfg, 'olvide', reglasDeCorreo(request, correo, [10, 5, 10], 3600)))) return demasiados();
   await despues(ctx, supa(cfg, '/auth/v1/recover', { cuerpo: { email: correo }, ip: ipReal(request) }));
   return responder({ ok: true });
 }
@@ -340,7 +349,7 @@ async function restablecer(request, cfg) {
   const correo = correoValido(d.correo);
   const codigo = codigoValido(d.codigo);
   const clave = claveValida(d.clave);
-  if (!(await permitir(cfg, 'restablecer', [[correo, 8, 900], [ipDe(request), 30, 900]]))) return demasiados();
+  if (!(await permitir(cfg, 'restablecer', reglasDeCorreo(request, correo, [30, 8, 30], 900)))) return demasiados();
   const v = await supa(cfg, '/auth/v1/verify', { cuerpo: { type: 'recovery', email: correo, token: codigo }, ip: ipReal(request) });
   if (!v.ok || !v.datos?.access_token) return error('El código no es correcto o ya venció.');
   const { usuario } = await usuarioDe(cfg, v.datos.access_token);
@@ -399,8 +408,10 @@ async function reclamar(request, cfg, s) {
   const d = await cuerpoJSON(request);
   const id = typeof d.codigo === 'string' ? d.codigo.trim().toLowerCase() : '';
   if (!UUID.test(id)) throw new ErrorEntrada('Ese enlace de regalo no es válido.');
+  /* El token todavía no lo validó Supabase: primero cuenta la IP, para que un token inventado
+     no pueda llenar la tabla de intentos con usuarios distintos. */
   const quien = reclamos(s.token).sub || 'x';
-  if (!(await permitir(cfg, 'reclamar', [[quien, 10, 3600]]))) return demasiados();
+  if (!(await permitir(cfg, 'reclamar', [[ipDe(request), 20, 3600], [quien, 10, 3600]]))) return demasiados();
   const r = await supa(cfg, '/rest/v1/rpc/reclamar_garaje', { token: s.token, cuerpo: { p_id: id } });
   if (!r.ok) return errorDeBase(r, s.cookies);
   return responder({ ok: true, reclamado: Boolean(r.datos?.reclamado) }, 200, s.cookies);
@@ -496,6 +507,13 @@ const RUTAS = {
   'POST cuenta/borrar': [borrarCuenta, true],
 };
 
+/* Rutas sin límite propio: un tope amplio por IP (pedidos, segundos) para que nadie las repita
+   en bucle y agote la cuota gratis de Supabase o de Cloudflare. Uso normal: muy por debajo. */
+const TOPES_POR_IP = {
+  'GET yo': [300, 600], 'GET garaje': [300, 600], 'PUT garaje': [300, 600],
+  'POST salir': [60, 600], 'POST 2fa/activar': [20, 3600],
+};
+
 /* Contra CSRF: además de SameSite=Strict, todo lo que cambia algo tiene que venir del
    mismo origen y con la cabecera propia de la página (un formulario de otro sitio no puede ponerla). */
 function mismoOrigen(request) {
@@ -513,6 +531,8 @@ export async function manejar(request, env, ctx) {
   if (request.method !== 'GET' && !mismoOrigen(request)) return error('Origen no permitido.', 403);
   const [accion, conSesion] = entrada;
   try {
+    const tope = TOPES_POR_IP[`${request.method} ${ruta}`];
+    if (tope && !(await permitir(cfg, `api-${ruta}`, [[ipDe(request), ...tope]]))) return demasiados();
     let s = null;
     if (conSesion) {
       s = await sesion(request, cfg);

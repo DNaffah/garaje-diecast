@@ -113,10 +113,11 @@ async function buscar(texto) {
     const ul = document.createElement('ul');
     ul.className = 'lista-resultados';
     lista.forEach((m) => ul.append(filaResultado(m)));
-    el.resultados.replaceChildren(ul);
+    const aviso = lista[0].respaldo ? [parrafo('La Hot Wheels Wiki no respondió. Mientras vuelve, estos son autos reales de Wikipedia.', 'pista-texto')] : [];
+    el.resultados.replaceChildren(...aviso, ul);
   } catch (err) {
     if (err.name === 'AbortError') return;
-    el.resultados.replaceChildren(parrafo('No se pudo conectar con la Hot Wheels Wiki. Revisa la conexión e intenta de nuevo.', 'pista-texto error'));
+    el.resultados.replaceChildren(parrafo('No se pudo conectar con la Hot Wheels Wiki ni con Wikipedia. Revisa la conexión e intenta de nuevo.', 'pista-texto error'));
   }
 }
 
@@ -338,7 +339,7 @@ async function completarDatos(clave) {
     if (!actual) return;
     const m = await leerModelo(actual.titulo);
     const a = garaje.find((x) => x.clave === clave);
-    if (!a) return;
+    if (!a || m.respaldo) return;
     const principal = m.imagen && !/sketch|drawing|render|concept|blueprint/i.test(decodificar(m.imagen)) ? m.imagen : '';
     const foto = principal || m.versiones.at(-1)?.foto || m.versiones[0]?.foto || m.galeria[0]?.foto || m.imagen;
     if (foto) a.foto = foto;

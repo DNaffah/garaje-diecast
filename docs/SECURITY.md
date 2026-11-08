@@ -18,7 +18,9 @@ Navegador → Cloudflare Pages (`sitio/` + `servidor/app.js` en `/api/*`) → Su
 | Saltarse la 2FA | `sesion_completa()` exige aal2 en la base cuando la cuenta tiene un factor verificado. Supabase además exige aal2 para cambiar la contraseña o quitar el factor |
 | Token robado después de cerrar sesión | `sesion_completa()` revisa que la sesión siga viva en `auth.sessions` |
 | Registrar primero el correo de otra persona | Al confirmar el código se vuelve a fijar la contraseña de quien confirma; la del primer registro deja de servir (probado en `tests/cuentas.cjs`) |
-| Fuerza bruta | Límites por IP (IPv6 por red /64) y por cuenta en entrar, registro, códigos, recuperación, 2FA y borrado (`permitir_intento`, con candado contra ráfagas). Los límites por cuenta solo cuentan fallos, para que nadie bloquee a otro con solo saber su correo. Supabase recibe la IP real (`Sb-Forwarded-For`) |
+| Fuerza bruta | Límites por IP (IPv6 por red /64) y por cuenta en entrar, registro, códigos, recuperación, 2FA y borrado (`permitir_intento`, con candado contra ráfagas). En entrar, los límites por cuenta solo cuentan fallos. En códigos y correos (`reglasDeCorreo`) hay tres contadores: IP, IP + correo (bajo) y correo (más alto): quien conoce un correo ajeno solo se bloquea a sí mismo, y el tope por correo sigue frenando a quien reparte el ataque entre muchas IPs. La IP siempre va primero. Supabase recibe la IP real (`Sb-Forwarded-For`) (probado en `tests/limites.cjs`) |
+| Repetir en bucle las rutas sin límite propio | `TOPES_POR_IP` en `servidor/app.js`: tope amplio por IP en `GET yo`, `GET/PUT garaje`, `salir` y `2fa/activar`. Reclamar regalo cuenta la IP antes que el usuario del token, que todavía no está validado |
+| La Hot Wheels Wiki se cae o bloquea las consultas | Plan de respaldo en `wiki.js`: tras 9 s o cualquier error, la búsqueda usa Wikipedia (solo artículos con ficha de automóvil) y el museo abre con el auto real. No se guarda nada nuevo en el garaje (probado en `tests/respaldo.cjs`) |
 | Saber qué correos tienen cuenta | Registro, reenvío y recuperación responden igual y en el mismo tiempo: el correo se manda después de responder |
 | Caída o saturación de Supabase | Si Supabase responde 429 o 5xx, la sesión no se borra: se responde 503 y se reintenta |
 | Contraseñas débiles | Mínimo 10 caracteres, letras y números, máximo 72 bytes (límite de bcrypt), en el servidor y en Supabase |
@@ -31,8 +33,9 @@ Navegador → Cloudflare Pages (`sitio/` + `servidor/app.js` en `/api/*`) → Su
 
 ## Riesgo aceptado
 - El link del regalo (`?g=`) es de un solo uso: la primera cuenta que lo use se queda con ese garaje. Se manda solo al dueño.
-- La clave pública de Supabase estuvo publicada en la versión de GitHub Pages. Hay que rotarla (crear una nueva, borrar la vieja y desactivar las claves legacy) antes de abrir el registro: ver `docs/DESPLIEGUE.md`.
-- Sin Turnstile ni regla de Rate Limiting de Cloudflare: los límites viven en la base. Si el sitio se abre a más gente, agregarlos.
+- La clave pública vieja de Supabase sigue en el historial de git (primer commit, `js/config.js`). Con ella se puede llamar directo al Auth de Supabase y saltarse los límites del servidor. A la base no llega: RLS y permisos la cierran. **Pendiente del dueño:** borrarla y desactivar las claves legacy (ver `docs/DESPLIEGUE.md`).
+- Los límites viven en la base: cada pedido abusivo igual llega a la función y gasta una consulta. Una regla de Rate Limiting de Cloudflare lo frenaría antes, pero necesita dominio propio (ver `docs/DESPLIEGUE.md`).
+- Los términos de Fandom (rev. dic. 2025) piden permiso escrito para el acceso automático. Regalo personal, no comercial, con pocas consultas, crédito CC BY-SA y fotos solo enlazadas: riesgo bajo, aceptado por el dueño. Si Fandom bloquea, entra el respaldo con Wikipedia.
 - Las vistas previas de Cloudflare no tienen variables de entorno (solo Production), así que no funcionan con datos reales.
 
 ## Si pasa un incidente
@@ -45,5 +48,6 @@ Navegador → Cloudflare Pages (`sitio/` + `servidor/app.js` en `/api/*`) → Su
 ## Privacidad y legal
 - Política en `sitio/privacidad.html` (Ley 1581 de 2012, Decreto 1377 de 2013). La autorización se pide con una casilla sin marcar, el servidor exige la versión vigente y la base anota la prueba sola al crear el usuario.
 - Encargados: Supabase, Cloudflare y el proveedor de correo, con sus contratos de tratamiento de datos.
-- Al borrar la cuenta queda solo una huella del correo con la fecha y la versión aceptada, 3 años. Limpieza diaria con pg_cron.
+- Al borrar la cuenta queda solo una huella del correo con la fecha y la versión aceptada, 3 años. Limpieza diaria con pg_cron (`public.limpieza_diaria()`): intentos viejos, cuentas sin confirmar a los 7 días junto con su autorización, y huellas de más de 3 años. Si una cuenta se borra desde el panel de Supabase, su autorización se seudonimiza igual.
+- Lo que se cree en el futuro en `public` nace sin permisos para `anon` ni `authenticated` (`alter default privileges`).
 - Contenido de terceros: Hot Wheels Wiki y Wikipedia (CC BY-SA), fotos libres de Commons con autor y licencia. Hot Wheels es marca de Mattel; sitio personal, sin fines comerciales y sin su logo.

@@ -39,7 +39,37 @@ export function imagenSegura(url) {
 const SIN_FOTO = /image not available|no ?image|noimage|placeholder|coming soon/i;
 const NO_SON_MODELOS = /^(List of|Category:|File:|Template:|User|\d{4}\b|Hot Wheels\b|Code 3|Base codes|Treasure Hunt)/i;
 
+/* Plan de respaldo: si la Hot Wheels Wiki no responde, tarda demasiado o bloquea las consultas,
+   se busca el auto real en Wikipedia (solo artículos con ficha de automóvil). Se pierden los datos
+   de la miniatura, pero el garaje y el museo siguen funcionando. */
+const RESPALDO = 'https://en.wikipedia.org/w/api.php';
+const ESPERA_WIKI = 9000;
+
+function conEspera(signal) {
+  if (typeof AbortSignal.timeout !== 'function' || typeof AbortSignal.any !== 'function') return signal;
+  return AbortSignal.any([signal, AbortSignal.timeout(ESPERA_WIKI)].filter(Boolean));
+}
+
+async function buscarEnWikipedia(texto, signal) {
+  const r = await pedirJSON(RESPALDO, {
+    action: 'query', generator: 'search', gsrsearch: `${texto} hastemplate:"Infobox automobile"`, gsrnamespace: '0', gsrlimit: '12',
+    prop: 'pageimages', piprop: 'thumbnail', pithumbsize: '200',
+  }, { signal });
+  return (r?.query?.pages ?? [])
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    .map((p) => ({ titulo: p.title, mini: imagenSegura(p.thumbnail?.source ?? ''), respaldo: true }));
+}
+
 export async function buscarModelos(texto, { signal } = {}) {
+  try {
+    return await buscarEnFandom(texto, conEspera(signal));
+  } catch (e) {
+    if (signal?.aborted) throw e;
+    return buscarEnWikipedia(texto, signal);
+  }
+}
+
+async function buscarEnFandom(texto, signal) {
   const r = await pedirJSON(API, {
     action: 'query', generator: 'search', gsrsearch: texto, gsrnamespace: '0', gsrlimit: '20',
     prop: 'pageimages|categories', piprop: 'thumbnail', pithumbsize: '200',
@@ -165,7 +195,7 @@ function leerGaleria(wikitexto) {
   });
 }
 
-export async function urlsDeArchivos(nombres, ancho = 480) {
+export async function urlsDeArchivos(nombres, ancho = 480, signal) {
   const unicos = [...new Set(nombres.filter(Boolean))];
   const mapa = new Map();
   for (let i = 0; i < unicos.length; i += 50) {
@@ -173,7 +203,7 @@ export async function urlsDeArchivos(nombres, ancho = 480) {
     const r = await pedirJSON(API, {
       action: 'query', titles: lote.map((n) => 'File:' + n).join('|'),
       prop: 'imageinfo', iiprop: 'url', iiurlwidth: String(ancho),
-    });
+    }, { signal });
     const normal = new Map((r?.query?.normalized ?? []).map((n) => [n.to, n.from]));
     for (const p of r?.query?.pages ?? []) {
       const info = p.imageinfo?.[0];
@@ -187,10 +217,25 @@ export async function urlsDeArchivos(nombres, ancho = 480) {
   return mapa;
 }
 
+/* Sin la wiki solo se sabe el nombre: el museo arma el auto real con Wikipedia (auto-real.js). */
+const modeloDeRespaldo = (titulo) => ({
+  titulo, serieDebut: '', anios: '', disenador: '', numero: '', imagen: '', descripcion: [], baseDice: '', basadoEn: '',
+  categorias: [], tipo: 'desconocido', versiones: [], galeria: [], respaldo: true,
+});
+
 export async function leerModelo(titulo) {
+  try {
+    return await leerDeFandom(titulo);
+  } catch {
+    return modeloDeRespaldo(titulo);
+  }
+}
+
+async function leerDeFandom(titulo) {
+  const signal = conEspera();
   const [parse, cats] = await Promise.all([
-    pedirJSON(API, { action: 'parse', page: titulo, prop: 'wikitext', redirects: '1' }),
-    pedirJSON(API, { action: 'query', titles: titulo, prop: 'categories', cllimit: 'max', clshow: '!hidden', redirects: '1' }),
+    pedirJSON(API, { action: 'parse', page: titulo, prop: 'wikitext', redirects: '1' }, { signal }),
+    pedirJSON(API, { action: 'query', titles: titulo, prop: 'categories', cllimit: 'max', clshow: '!hidden', redirects: '1' }, { signal }),
   ]);
   const wikitexto = (parse?.parse?.wikitext ?? '').slice(0, TOPE_WIKITEXTO);
   if (!wikitexto) throw new Error('La wiki no devolvió esa página.');
@@ -204,7 +249,7 @@ export async function leerModelo(titulo) {
   const versiones = leerVersiones(wikitexto).filter((v) => !SIN_FOTO.test(v.archivo));
   const galeria = leerGaleria(wikitexto).filter((g) => !SIN_FOTO.test(g.archivo)).slice(0, 24);
   const imagenPrincipal = campoPlantilla(wikitexto, 'image');
-  const urls = await urlsDeArchivos([...versiones.map((v) => v.archivo), ...galeria.map((g) => g.archivo), imagenPrincipal]);
+  const urls = await urlsDeArchivos([...versiones.map((v) => v.archivo), ...galeria.map((g) => g.archivo), imagenPrincipal], 480, signal);
   versiones.forEach((v) => { v.foto = urls.get(v.archivo) || ''; });
 
   const licenciado = categorias.includes('Licensed Hot Wheels');

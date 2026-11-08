@@ -286,6 +286,7 @@ function pintarMiniatura(modelo) {
     .filter(([, v]) => v)
     .forEach(([k, v]) => { const d = document.createElement('div'); d.append(texto('dt', k), texto('dd', v)); dl.append(d); });
   nodos.push(dl);
+  if (modelo.respaldo) nodos.push(texto('p', 'La Hot Wheels Wiki no respondió o no tiene esta página, así que aquí faltan los datos y las versiones de la miniatura. El auto real se arma con Wikipedia.', 'nota-idioma'));
   if (modelo.versiones.length) {
     const ul = document.createElement('ul');
     ul.className = 'versiones';
@@ -367,7 +368,8 @@ function parrafoConEnlaces(partes) {
 function pintarCreditos(modelo, r) {
   const BY_SA_3 = 'https://creativecommons.org/licenses/by-sa/3.0/';
   const BY_SA_4 = 'https://creativecommons.org/licenses/by-sa/4.0/';
-  const nodos = [
+  const MARCA = 'Hot Wheels es una marca registrada de Mattel, Inc.; este garaje es un regalo personal, no comercial, sin relación con Mattel ni respaldo de su parte.';
+  const nodos = modelo.respaldo ? [texto('p', MARCA)] : [
     parrafoConEnlaces(['Datos y textos de la miniatura: ', { href: WIKI_BASE + encodeURIComponent(modelo.titulo.replace(/ /g, '_')), texto: 'Hot Wheels Wiki (Fandom)' },
       ', colaboradores de la wiki, ', { href: BY_SA_3, texto: 'CC BY-SA 3.0' },
       '. Las fotos de las miniaturas pertenecen a sus autores o a Mattel y se muestran enlazadas desde la wiki, sin copiarlas. Hot Wheels es una marca registrada de Mattel, Inc.; este garaje es un regalo personal, no comercial, sin relación con Mattel ni respaldo de su parte.']),

@@ -199,16 +199,29 @@ begin
 end $$;
 
 -- 8. Limpieza diaria (pg_cron): intentos de más de un día, cuentas que nunca confirmaron
---    el correo después de 7 días y pruebas de autorización de cuentas borradas hace 3 años.
+--    el correo después de 7 días (con su autorización: nunca llegaron a ser cuentas) y pruebas
+--    de autorización de cuentas borradas hace 3 años. Si una cuenta se borra desde el panel de
+--    Supabase, su autorización queda seudonimizada igual que con "borrar mi cuenta".
+create or replace function public.limpieza_diaria()
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  delete from public.intentos where momento < now() - interval '1 day';
+  delete from public.autorizaciones a using auth.users u
+   where a.usuario = u.id and u.email_confirmed_at is null and u.created_at < now() - interval '7 days';
+  delete from auth.users where email_confirmed_at is null and created_at < now() - interval '7 days';
+  update public.autorizaciones a set usuario = null, borrada = now()
+   where a.borrada is null and a.usuario is not null and not exists (select 1 from auth.users u where u.id = a.usuario);
+  delete from public.autorizaciones where borrada < now() - interval '3 years';
+end $$;
+revoke all on function public.limpieza_diaria() from public, anon, authenticated;
+
 do $$
 begin
   if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
     create extension if not exists pg_cron with schema pg_catalog;
-    perform cron.schedule('garaje-limpieza', '17 9 * * *', $q$
-      delete from public.intentos where momento < now() - interval '1 day';
-      delete from auth.users where email_confirmed_at is null and created_at < now() - interval '7 days';
-      delete from public.autorizaciones where borrada < now() - interval '3 years';
-    $q$);
+    perform cron.schedule('garaje-limpieza', '17 9 * * *', 'select public.limpieza_diaria();');
   else
     raise notice 'pg_cron no está disponible: la limpieza diaria queda sin programar';
   end if;
@@ -230,6 +243,13 @@ grant execute on function public.guardar_mi_garaje(jsonb, text) to authenticated
 grant execute on function public.reclamar_garaje(uuid) to authenticated;
 grant execute on function public.borrar_mi_cuenta() to authenticated;
 grant execute on function public.permitir_intento(text, int, int, boolean) to service_role;
+
+-- 10. Lo que se cree en el futuro en public nace cerrado: Supabase les da permisos a anon y
+--     authenticated por defecto en cada tabla, secuencia o función nueva. (A las funciones
+--     también las puede ejecutar PUBLIC: por eso cada función nueva lleva su revoke, como arriba.)
+alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated;
+alter default privileges for role postgres in schema public revoke all on sequences from anon, authenticated;
+alter default privileges for role postgres in schema public revoke all on functions from anon, authenticated;
 
 -- Revisiones útiles después de correrlo:
 -- select routine_name, grantee from information_schema.routine_privileges where routine_schema = 'public' order by 1, 2;
