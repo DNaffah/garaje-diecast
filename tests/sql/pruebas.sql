@@ -112,7 +112,9 @@ insert into auth.users (id, email, raw_user_meta_data, email_confirmed_at, creat
   ('dddddddd-0000-4000-8000-000000000004', 'vieja@ejemplo.co', '{"politica_version":"2026-11-02"}', null, now() - interval '8 days'),
   ('eeeeeeee-0000-4000-8000-000000000005', 'panel@ejemplo.co', '{"politica_version":"2026-11-02"}', now(), now());
 delete from auth.users where id = 'eeeeeeee-0000-4000-8000-000000000005';
+insert into public.autorizaciones (correo_huella, version, borrada) values ('huella-de-hace-4-anios', '2026-11-02', now() - interval '4 years');
 select pg_temp.falla('set local role anon; select public.limpieza_diaria()', '42501');
+select pg_temp.falla('set local role service_role; select public.limpieza_diaria()', '42501');
 select public.limpieza_diaria();
 do $$ begin
   if exists (select 1 from auth.users where id = 'dddddddd-0000-4000-8000-000000000004') then raise exception 'no borró la cuenta sin confirmar'; end if;
@@ -123,16 +125,17 @@ do $$ begin
     raise exception 'la autorización de la cuenta borrada desde el panel no quedó seudonimizada'; end if;
   if exists (select 1 from public.autorizaciones a where a.usuario is not null and not exists (select 1 from auth.users u where u.id = a.usuario)) then
     raise exception 'quedaron autorizaciones huérfanas'; end if;
+  if exists (select 1 from public.autorizaciones where correo_huella = 'huella-de-hace-4-anios') then raise exception 'no borró la huella de más de 3 años'; end if;
+  if (select count(*) from public.autorizaciones where correo_huella = encode(extensions.digest('ana@ejemplo.co', 'sha256'), 'hex')) <> 1 then
+    raise exception 'la limpieza borró la huella de Ana antes de los 3 años'; end if;
 end $$;
 
 -- Lo nuevo en public nace sin permisos para anon ni authenticated.
 create table public.tabla_futura (x int);
-create function public.funcion_futura() returns int language sql as 'select 1';
 do $$ begin
   if has_table_privilege('anon', 'public.tabla_futura', 'SELECT') or has_table_privilege('authenticated', 'public.tabla_futura', 'INSERT') then
     raise exception 'una tabla nueva nace abierta'; end if;
 end $$;
 drop table public.tabla_futura;
-drop function public.funcion_futura();
 
 select 'OK: SQL probado en PostgreSQL ' || current_setting('server_version') as resultado;

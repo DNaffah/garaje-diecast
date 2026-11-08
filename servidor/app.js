@@ -57,6 +57,8 @@ async function cuerpoJSON(request, maximo = 4096) {
 class ErrorEntrada extends Error {
   constructor(mensaje, estado = 400) { super(mensaje); this.estado = estado; }
 }
+/* La base no respondió al revisar un límite: se contesta "ocupado" (503). */
+class ErrorOcupado extends Error {}
 
 function correoValido(v) {
   const c = typeof v === 'string' ? v.trim().toLowerCase() : '';
@@ -167,8 +169,13 @@ async function permitir(cfg, accion, reglas) {
   for (const [parte, maximo, segundos, tipo] of reglas) {
     const clave = `${accion}:${await huella(cfg, parte)}`;
     const r = await supa(cfg, '/rest/v1/rpc/permitir_intento', { secreta: true, cuerpo: { p_clave: clave, p_max: maximo, p_segundos: segundos, p_anotar: tipo !== 'fallos' } });
-    if (!r.ok || r.datos !== true) {
-      console.warn(JSON.stringify({ evento: 'limite', accion, estado: r.status }));
+    if (!r.ok) {
+      /* Si la base no responde no se deja pasar, pero se dice "ocupado", no "demasiados intentos". */
+      console.warn(JSON.stringify({ evento: 'limite_sin_base', accion, estado: r.status }));
+      throw new ErrorOcupado();
+    }
+    if (r.datos !== true) {
+      console.warn(JSON.stringify({ evento: 'limite', accion }));
       return false;
     }
   }
@@ -200,13 +207,16 @@ function despues(ctx, promesa) {
   if (ctx?.waitUntil) ctx.waitUntil(promesa.catch(() => {}));
   else return promesa.catch(() => {});
 }
-/* Códigos y correos: el tope bajo cuenta por IP + correo, así quien conoce un correo ajeno solo
-   se bloquea a sí mismo. El tope global por correo es más alto y sigue frenando a quien reparte
-   el ataque entre muchas IPs (adivinar un código de 6 números o llenar un buzón). La IP va
-   primero: una IP bloqueada ya no suma en los demás contadores. */
-function reglasDeCorreo(request, correo, [porIp, porIpYCorreo, porCorreo], segundos) {
+/* Códigos y correos: el tope más bajo cuenta por IP + correo, así quien conoce un correo ajeno
+   desde una sola IP no alcanza a bloquear a su dueño. El tope por correo (y el diario) frena a
+   quien reparte el ataque entre muchas IPs para adivinar un código de 6 números o llenar un
+   buzón; con varias IPs todavía podría bloquear al dueño un rato: es el precio de ese freno.
+   La IP va primero: una IP bloqueada ya no suma en los demás contadores. */
+function reglasDeCorreo(request, correo, [porIp, porIpYCorreo, porCorreo, porDia], segundos) {
   const ip = ipDe(request);
-  return [[ip, porIp, segundos], [`${ip}|${correo}`, porIpYCorreo, segundos], [correo, porCorreo, segundos]];
+  const reglas = [[ip, porIp, segundos], [`${ip}|${correo}`, porIpYCorreo, segundos], [correo, porCorreo, segundos]];
+  if (porDia) reglas.push([`${correo}|dia`, porDia, 86400]);
+  return reglas;
 }
 const demasiados = () => error('Demasiados intentos. Espera unos minutos y vuelve a probar.', 429);
 
@@ -235,7 +245,7 @@ async function verificar(request, cfg) {
   const codigo = codigoValido(d.codigo);
   if (typeof d.clave !== 'string' || !d.clave || d.clave.length > 200) throw new ErrorEntrada('Vuelve a escribir tu contraseña.');
   claveValida(d.clave);
-  if (!(await permitir(cfg, 'verificar', reglasDeCorreo(request, correo, [30, 8, 30], 900)))) return demasiados();
+  if (!(await permitir(cfg, 'verificar', reglasDeCorreo(request, correo, [30, 5, 10, 50], 900)))) return demasiados();
   const r = await supa(cfg, '/auth/v1/verify', { cuerpo: { type: 'email', email: correo, token: codigo }, ip: ipReal(request) });
   if (!r.ok || !r.datos?.access_token) return error('El código no es correcto o ya venció.');
   const cambio = await cambiarClave(cfg, r.datos.access_token, d.clave);
@@ -327,7 +337,7 @@ async function salir(request, cfg, s) {
 async function olvide(request, cfg, s, ctx) {
   const d = await cuerpoJSON(request);
   const correo = correoValido(d.correo);
-  if (!(await permitir(cfg, 'olvide', reglasDeCorreo(request, correo, [10, 5, 10], 3600)))) return demasiados();
+  if (!(await permitir(cfg, 'olvide', reglasDeCorreo(request, correo, [10, 3, 6], 3600)))) return demasiados();
   await despues(ctx, supa(cfg, '/auth/v1/recover', { cuerpo: { email: correo }, ip: ipReal(request) }));
   return responder({ ok: true });
 }
@@ -349,7 +359,7 @@ async function restablecer(request, cfg) {
   const correo = correoValido(d.correo);
   const codigo = codigoValido(d.codigo);
   const clave = claveValida(d.clave);
-  if (!(await permitir(cfg, 'restablecer', reglasDeCorreo(request, correo, [30, 8, 30], 900)))) return demasiados();
+  if (!(await permitir(cfg, 'restablecer', reglasDeCorreo(request, correo, [30, 5, 10, 50], 900)))) return demasiados();
   const v = await supa(cfg, '/auth/v1/verify', { cuerpo: { type: 'recovery', email: correo, token: codigo }, ip: ipReal(request) });
   if (!v.ok || !v.datos?.access_token) return error('El código no es correcto o ya venció.');
   const { usuario } = await usuarioDe(cfg, v.datos.access_token);
@@ -508,10 +518,10 @@ const RUTAS = {
 };
 
 /* Rutas sin límite propio: un tope amplio por IP (pedidos, segundos) para que nadie las repita
-   en bucle y agote la cuota gratis de Supabase o de Cloudflare. Uso normal: muy por debajo. */
+   en bucle y agote la cuota gratis de Supabase o de Cloudflare. Uso normal: muy por debajo.
+   "salir" no lleva tope: cerrar sesión siempre tiene que borrar las cookies. */
 const TOPES_POR_IP = {
-  'GET yo': [300, 600], 'GET garaje': [300, 600], 'PUT garaje': [300, 600],
-  'POST salir': [60, 600], 'POST 2fa/activar': [20, 3600],
+  'GET yo': [300, 600], 'GET garaje': [300, 600], 'PUT garaje': [300, 600], 'POST 2fa/activar': [20, 3600],
 };
 
 /* Contra CSRF: además de SameSite=Strict, todo lo que cambia algo tiene que venir del
@@ -532,7 +542,7 @@ export async function manejar(request, env, ctx) {
   const [accion, conSesion] = entrada;
   try {
     const tope = TOPES_POR_IP[`${request.method} ${ruta}`];
-    if (tope && !(await permitir(cfg, `api-${ruta}`, [[ipDe(request), ...tope]]))) return demasiados();
+    if (tope && !(await permitir(cfg, `api-${request.method}-${ruta}`, [[ipDe(request), ...tope]]))) return demasiados();
     let s = null;
     if (conSesion) {
       s = await sesion(request, cfg);
@@ -542,6 +552,7 @@ export async function manejar(request, env, ctx) {
     return await accion(request, cfg, s, ctx);
   } catch (e) {
     if (e instanceof ErrorEntrada) return error(e.message, e.estado);
+    if (e instanceof ErrorOcupado) return ocupado();
     console.error(JSON.stringify({ evento: 'error', ruta, mensaje: String(e?.message || e).slice(0, 200) }));
     return error('Algo falló en el servidor. Intenta de nuevo.', 500);
   }

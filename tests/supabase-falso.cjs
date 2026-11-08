@@ -16,7 +16,7 @@ const garajes = [];              // { id, dueno, autos, fondo, actualizado }
 const intentos = [];
 const autorizaciones = [];
 const retos = new Map();
-const ajustes = { autoconfirmar: false }; /* como apagar "Confirm email" en Supabase */
+const ajustes = { autoconfirmar: false, baseCaida: false }; /* autoconfirmar: como apagar "Confirm email"; baseCaida: la tabla de intentos no responde */
 
 const b64u = (b) => Buffer.from(b).toString('base64url');
 function jwt(id, aal) {
@@ -170,6 +170,7 @@ function servidor() {
 
     /* ----- funciones SQL ----- */
     const rpc = /^\/rest\/v1\/rpc\/(\w+)$/.exec(ruta)?.[1];
+    if (rpc === 'permitir_intento' && ajustes.baseCaida) return enviar(503, { message: 'base caída (simulada)' });
     if (rpc === 'permitir_intento') {
       if (apikey !== SECRETA) return pg(401, '42501');
       const ahora = Date.now();

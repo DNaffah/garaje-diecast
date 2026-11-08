@@ -16,7 +16,12 @@ export async function pedirJSON(base, params, { signal } = {}) {
     return json;
   });
   cache.set(url, promesa);
-  promesa.catch(() => cache.delete(url));
+  /* Una búsqueda cancelada sale del caché en el acto: si no, la siguiente igual se colgaría
+     de la promesa cancelada y caería al respaldo con la wiki funcionando. */
+  let lista = false;
+  const soltar = () => { if (cache.get(url) === promesa) cache.delete(url); };
+  promesa.then(() => { lista = true; }, soltar);
+  signal?.addEventListener('abort', () => { if (!lista) soltar(); }, { once: true });
   return promesa;
 }
 
@@ -195,7 +200,7 @@ function leerGaleria(wikitexto) {
   });
 }
 
-export async function urlsDeArchivos(nombres, ancho = 480, signal) {
+export async function urlsDeArchivos(nombres, ancho = 480) {
   const unicos = [...new Set(nombres.filter(Boolean))];
   const mapa = new Map();
   for (let i = 0; i < unicos.length; i += 50) {
@@ -203,7 +208,7 @@ export async function urlsDeArchivos(nombres, ancho = 480, signal) {
     const r = await pedirJSON(API, {
       action: 'query', titles: lote.map((n) => 'File:' + n).join('|'),
       prop: 'imageinfo', iiprop: 'url', iiurlwidth: String(ancho),
-    }, { signal });
+    }, { signal: conEspera() });
     const normal = new Map((r?.query?.normalized ?? []).map((n) => [n.to, n.from]));
     for (const p of r?.query?.pages ?? []) {
       const info = p.imageinfo?.[0];
@@ -226,16 +231,16 @@ const modeloDeRespaldo = (titulo) => ({
 export async function leerModelo(titulo) {
   try {
     return await leerDeFandom(titulo);
-  } catch {
+  } catch (e) {
+    console.warn('Hot Wheels Wiki sin respuesta, se usa el respaldo:', e?.message || e);
     return modeloDeRespaldo(titulo);
   }
 }
 
 async function leerDeFandom(titulo) {
-  const signal = conEspera();
   const [parse, cats] = await Promise.all([
-    pedirJSON(API, { action: 'parse', page: titulo, prop: 'wikitext', redirects: '1' }, { signal }),
-    pedirJSON(API, { action: 'query', titles: titulo, prop: 'categories', cllimit: 'max', clshow: '!hidden', redirects: '1' }, { signal }),
+    pedirJSON(API, { action: 'parse', page: titulo, prop: 'wikitext', redirects: '1' }, { signal: conEspera() }),
+    pedirJSON(API, { action: 'query', titles: titulo, prop: 'categories', cllimit: 'max', clshow: '!hidden', redirects: '1' }, { signal: conEspera() }),
   ]);
   const wikitexto = (parse?.parse?.wikitext ?? '').slice(0, TOPE_WIKITEXTO);
   if (!wikitexto) throw new Error('La wiki no devolvió esa página.');
@@ -249,7 +254,7 @@ async function leerDeFandom(titulo) {
   const versiones = leerVersiones(wikitexto).filter((v) => !SIN_FOTO.test(v.archivo));
   const galeria = leerGaleria(wikitexto).filter((g) => !SIN_FOTO.test(g.archivo)).slice(0, 24);
   const imagenPrincipal = campoPlantilla(wikitexto, 'image');
-  const urls = await urlsDeArchivos([...versiones.map((v) => v.archivo), ...galeria.map((g) => g.archivo), imagenPrincipal], 480, signal);
+  const urls = await urlsDeArchivos([...versiones.map((v) => v.archivo), ...galeria.map((g) => g.archivo), imagenPrincipal], 480).catch(() => new Map());
   versiones.forEach((v) => { v.foto = urls.get(v.archivo) || ''; });
 
   const licenciado = categorias.includes('Licensed Hot Wheels');

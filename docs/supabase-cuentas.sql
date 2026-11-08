@@ -215,7 +215,7 @@ begin
    where a.borrada is null and a.usuario is not null and not exists (select 1 from auth.users u where u.id = a.usuario);
   delete from public.autorizaciones where borrada < now() - interval '3 years';
 end $$;
-revoke all on function public.limpieza_diaria() from public, anon, authenticated;
+revoke all on function public.limpieza_diaria() from public, anon, authenticated, service_role;
 
 do $$
 begin

@@ -16,10 +16,14 @@ const OUT = process.argv[2] || 'capturas';
   page.on('pageerror', (e) => errores.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.g|Failed to load resource/.test(m.text())) errores.push(m.text()); });
   let llamadasFandom = 0;
-  await page.route(/^https:\/\/(?!fonts\.)/, (route) => {
+  let modo = 'lenta';
+  await page.route(/^https:\/\/(?!fonts\.)/, async (route) => {
     if (new URL(route.request().url()).hostname === 'hotwheels.fandom.com') {
       llamadasFandom++;
-      return route.fulfill({ status: 403, contentType: 'text/html', body: '<h1>Blocked</h1>' });
+      if (modo === 'colgada') return; /* nunca responde */
+      if (modo === 'bloqueada') return route.fulfill({ status: 403, contentType: 'text/html', body: '<h1>Blocked</h1>' });
+      await new Promise((r) => setTimeout(r, 800));
+      return simular(route).catch(() => {});
     }
     return simular(route);
   });
@@ -27,7 +31,22 @@ const OUT = process.argv[2] || 'capturas';
   await cuentaNueva(page, correoUnico('respaldo'));
   await page.waitForTimeout(400);
 
+  /* 0. Con la wiki sana pero lenta, buscar otra vez lo mismo (Enter a mitad de la primera
+        búsqueda) no debe caer al respaldo. */
   await page.fill('#q', 'skyline');
+  await page.waitForTimeout(450);
+  await page.press('#q', 'Enter');
+  await page.waitForSelector('.resultado');
+  if (/no respondió/.test(await page.locator('#resultados').innerText())) fallos.push('una búsqueda repetida cayó al respaldo con la wiki funcionando');
+
+  /* 1. Wiki colgada: a los 9 s entra el respaldo. */
+  modo = 'colgada';
+  await page.fill('#q', 'skyline r34');
+  await page.waitForSelector('#resultados :text("no respondió")', { timeout: 15000 }).catch(() => fallos.push('con la wiki colgada no entró el respaldo'));
+
+  /* 2. Wiki bloqueada (403). */
+  modo = 'bloqueada';
+  await page.fill('#q', 'skyline gt');
   await page.waitForSelector('.resultado');
   const aviso = await page.locator('#resultados').innerText().catch(() => '');
   if (!/no respondió/.test(aviso)) fallos.push('no se avisa que la búsqueda viene de Wikipedia');

@@ -37,4 +37,4 @@ tests/                    simulador de APIs, Supabase falso, pruebas de navegado
 - Comentarios cortos con `/* */`, en español, explicando el porqué.
 
 ## Definición de terminado
-Pasan `tests/cuentas.cjs`, `tests/e2e.cjs`, `tests/pantallas.cjs` y `tests/sql/probar.sh`; capturas revisadas; consola sin errores; revisión de seguridad aparte para cambios de acceso o datos; prueba en vivo contra Supabase y Cloudflare.
+Pasan `tests/cuentas.cjs`, `tests/e2e.cjs`, `tests/pantallas.cjs`, `tests/respaldo.cjs`, `tests/limites.cjs` y `tests/sql/probar.sh`; capturas revisadas; consola sin errores; revisión de seguridad aparte para cambios de acceso o datos; prueba en vivo contra Supabase y Cloudflare.

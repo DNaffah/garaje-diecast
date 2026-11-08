@@ -1,6 +1,6 @@
 /* El museo de cada carro: el recorrido con el scroll, la ficha, la miniatura y su base. */
 import { leerModelo, WIKI_BASE, imagenSegura, decodificar } from './wiki.js';
-import { leerAutoReal, recorridoDesde, llaveSerie } from './auto-real.js';
+import { leerAutoReal, recorridoDesde, llaveSerie, marcaDe } from './auto-real.js';
 import { autoDelGaraje, actualizarAuto, quitarAuto, agregarAuto } from './garaje.js';
 import { quizasMostrarNota } from './animo.js';
 import { confirmarDosVeces } from './confirmar.js';
@@ -118,12 +118,17 @@ async function abrir(titulo) {
     return;
   }
   if (id !== carga) return;
+  /* Sin la wiki, la foto de la miniatura que ya está en la vitrina sirve para el recorrido. */
+  if (modelo.respaldo) modelo.imagen = imagenSegura(autoDelGaraje(titulo)?.foto || '');
   modeloActual = modelo;
   el.titulo.textContent = modelo.titulo;
   pintarMiniatura(modelo);
   pintarBase(modelo);
 
-  if (modelo.tipo !== 'original') {
+  /* Sin la wiki y sin una marca en el nombre (un diseño original, por ejemplo), buscar "el auto
+     real" en Commons traería fotos de cualquier cosa: mejor no mostrar ninguna. */
+  const adivinaria = modelo.respaldo && !marcaDe(modelo.titulo);
+  if (modelo.tipo !== 'original' && !adivinaria) {
     el.tipo.textContent = 'Buscando el auto real…';
     real = await leerAutoReal(modelo).catch(() => null);
     if (id !== carga) return;
@@ -244,6 +249,11 @@ function fondoAlAzar() {
 }
 
 function pintarReal(modelo, r) {
+  if (modelo.respaldo && !r) {
+    el.real.replaceChildren(texto('p', 'El auto', 'rotulo'), texto('h3', 'Sin datos por ahora'),
+      texto('p', 'Sin la Hot Wheels Wiki no se puede saber con certeza qué auto hay detrás de este modelo. Vuelve a abrirlo más tarde.', 'texto-real'));
+    return;
+  }
   if (modelo.tipo === 'original') {
     const cuerpo = document.createElement('div');
     cuerpo.append(texto('p', 'Este modelo salió del estudio de diseño de la marca: no copia un auto que exista en la calle. Por eso el recorrido pasa por sus versiones de color.', 'texto-real'));
@@ -317,7 +327,7 @@ function pintarMiniatura(modelo) {
     });
     nodos.push(carrusel(ul, modelo.versiones.length));
   }
-  nodos.push(enlace(WIKI_BASE + encodeURIComponent(modelo.titulo.replace(/ /g, '_')), 'Ver la ficha completa en la Hot Wheels Wiki'));
+  if (!modelo.respaldo) nodos.push(enlace(WIKI_BASE + encodeURIComponent(modelo.titulo.replace(/ /g, '_')), 'Ver la ficha completa en la Hot Wheels Wiki'));
   el.mini.replaceChildren(...nodos);
 }
 

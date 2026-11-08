@@ -55,6 +55,21 @@ const verificar = (ip, correo) => pedir('POST', 'verificar', ip, { correo, codig
   const debil = await pedir('POST', 'verificar', '203.0.113.60', { correo: 'debil@ejemplo.co', codigo: '000000', clave: 'abc' });
   if (debil.estado !== 400 || !/contraseña/i.test(debil.datos.error || '')) fallos.push(`una contraseña débil al confirmar no se rechazó bien (${debil.estado})`);
 
+  /* 7. Cerrar sesión no tiene tope: siempre borra las cookies. */
+  let salidas = 0;
+  for (let i = 0; i < 70; i++) {
+    const r = await fetch(BASE + 'salir', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Garaje': '1', Origin: 'http://127.0.0.1:8788', 'CF-Connecting-IP': '203.0.113.70' }, body: '{}' });
+    if (r.status === 200 && /__Host-garaje_s=;/.test(r.headers.get('set-cookie') || '')) salidas++;
+  }
+  if (salidas !== 70) fallos.push(`salir no borró las cookies en todos los intentos (${salidas}/70)`);
+
+  /* 8. Si la tabla de intentos no responde: no se deja pasar y se dice "ocupado" (503), no 429. */
+  await fetch('http://127.0.0.1:54321/__ajustes', { method: 'POST', body: JSON.stringify({ baseCaida: true }) });
+  const caida = await verificar('203.0.113.80', 'caida@ejemplo.co');
+  const yo = await pedir('GET', 'yo', '203.0.113.81');
+  await fetch('http://127.0.0.1:54321/__ajustes', { method: 'POST', body: JSON.stringify({ baseCaida: false }) });
+  if (caida.estado !== 503 || yo.estado !== 503) fallos.push(`con la base caída se esperaba 503 y salió ${caida.estado} / ${yo.estado}`);
+
   if (fallos.length) { console.log('FALLOS:\n- ' + fallos.join('\n- ')); process.exit(1); }
   console.log('OK: límites por IP, por IP y correo, y por correo funcionan');
 })();
